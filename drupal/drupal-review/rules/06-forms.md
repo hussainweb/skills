@@ -1,0 +1,267 @@
+# Form API
+
+## Form Class Hierarchy
+
+| Class | Use when |
+|---|---|
+| `FormBase` | General-purpose forms without config |
+| `ConfigFormBase` | Module settings that map to a config object |
+| `EntityForm` | Forms for entity create/edit/delete (auto-wires entity) |
+| `ConfirmFormBase` | Confirmation before a destructive operation |
+
+## Basic Form Pattern
+
+```php
+namespace Drupal\my_module\Form;
+
+use Drupal\Core\Form\FormBase;
+use Drupal\Core\Form\FormStateInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+class ExampleForm extends FormBase {
+
+  public static function create(ContainerInterface $container): static {
+    return new static($container->get('my_module.my_service'));
+  }
+
+  public function __construct(protected readonly MyService $myService) {}
+
+  // Must be globally unique. Convention: module_name_form_name
+  public function getFormId(): string {
+    return 'my_module_example_form';
+  }
+
+  public function buildForm(array $form, FormStateInterface $form_state): array {
+    $form['title'] = [
+      '#type'          => 'textfield',
+      '#title'         => $this->t('Title'),
+      '#required'      => TRUE,
+      '#default_value' => $form_state->getValue('title', ''),
+      '#maxlength'     => 255,
+    ];
+    $form['body'] = [
+      '#type'  => 'textarea',
+      '#title' => $this->t('Body'),
+      '#rows'  => 5,
+    ];
+    $form['actions'] = ['#type' => 'actions'];
+    $form['actions']['submit'] = [
+      '#type'  => 'submit',
+      '#value' => $this->t('Save'),
+    ];
+    return $form;
+  }
+
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
+    $title = $form_state->getValue('title');
+    if (strlen($title) < 3) {
+      $form_state->setErrorByName('title', $this->t('Title must be at least 3 characters.'));
+    }
+  }
+
+  public function submitForm(array &$form, FormStateInterface $form_state): void {
+    $title = $form_state->getValue('title');
+    $this->myService->save($title);
+    $this->messenger()->addStatus($this->t('Saved successfully.'));
+    $form_state->setRedirectUrl(\Drupal\Core\Url::fromRoute('my_module.list'));
+  }
+}
+```
+
+## ConfigFormBase Pattern
+
+```php
+class SettingsForm extends ConfigFormBase {
+
+  protected function getEditableConfigNames(): array {
+    return ['my_module.settings'];
+  }
+
+  public function getFormId(): string {
+    return 'my_module_settings_form';
+  }
+
+  public function buildForm(array $form, FormStateInterface $form_state): array {
+    $config = $this->config('my_module.settings');
+    $form['salutation'] = [
+      '#type'          => 'textfield',
+      '#title'         => $this->t('Salutation'),
+      '#default_value' => $config->get('salutation'),
+    ];
+    return parent::buildForm($form, $form_state); // adds Save button
+  }
+
+  public function submitForm(array &$form, FormStateInterface $form_state): void {
+    $this->config('my_module.settings')
+      ->set('salutation', $form_state->getValue('salutation'))
+      ->save();
+    parent::submitForm($form, $form_state); // adds success message
+  }
+}
+```
+
+## Common Form Element Types
+
+| `#type` | Description |
+|---|---|
+| `textfield` | Single-line text input |
+| `textarea` | Multi-line text |
+| `password` | Password field (not stored in form state) |
+| `email` | Email input with HTML5 validation |
+| `number` | Numeric input |
+| `url` | URL input |
+| `select` | Dropdown (`#options` array required) |
+| `radios` | Radio buttons (`#options` array required) |
+| `checkboxes` | Multiple checkboxes (`#options` array required) |
+| `checkbox` | Single checkbox |
+| `date` | Date picker |
+| `managed_file` | File upload with Drupal file management |
+| `link` | URL + title field pair |
+| `machine_name` | Auto-generated machine-readable name |
+| `details` | Collapsible fieldset |
+| `fieldset` | Non-collapsible grouping |
+| `container` | Invisible wrapper (`#tree` for nested values) |
+| `actions` | Standard action buttons container |
+| `submit` | Submit button |
+| `hidden` | Hidden input |
+| `token` | CSRF token (auto-added by Form API) |
+| `table` | Table with draggable rows |
+| `item` | Read-only display value |
+
+## Validation Rules
+
+- Run validation in `validateForm()`, not `submitForm()`.
+- Use `$form_state->setErrorByName('element_name', $message)` — ties error display to the specific field.
+- Use `$form_state->setError($form['element'], $message)` for nested elements.
+- If any `setError*()` is called, `submitForm()` is not executed.
+- For field-level validation in entity forms, implement `#element_validate` callbacks or constraints.
+
+## AJAX Forms
+
+```php
+$form['type'] = [
+  '#type'    => 'select',
+  '#options' => $options,
+  '#ajax'    => [
+    'callback' => [$this, 'typeChangeCallback'],
+    'wrapper'  => 'type-dependent-wrapper',
+    'event'    => 'change',
+    'progress' => ['type' => 'throbber', 'message' => NULL],
+  ],
+];
+
+// The wrapper div that gets replaced
+$form['dependent'] = [
+  '#type'   => 'container',
+  '#prefix' => '<div id="type-dependent-wrapper">',
+  '#suffix' => '</div>',
+  '#tree'   => TRUE,
+];
+
+// AJAX callback — returns the element to replace the wrapper
+public function typeChangeCallback(array &$form, FormStateInterface $form_state): array {
+  return $form['dependent'];
+}
+```
+
+**Rules:**
+- The callback must return a render array — the wrapper div content is replaced with this.
+- Use `$form_state->isRebuilding()` or `$form_state->getTriggeringElement()` to detect AJAX vs full submit.
+- Use `$form_state->setRebuild()` to trigger a form rebuild without actually submitting.
+
+## States API (Client-Side Behavior)
+
+```php
+// Show field only when checkbox is checked
+$form['extra'] = [
+  '#type'   => 'textfield',
+  '#title'  => $this->t('Extra'),
+  '#states' => [
+    'visible' => [
+      ':input[name="enable_extra"]' => ['checked' => TRUE],
+    ],
+  ],
+];
+
+// Multiple conditions (AND)
+'visible' => [
+  ':input[name="field_a"]' => ['value' => 'yes'],
+  ':input[name="field_b"]' => ['checked' => TRUE],
+],
+
+// OR condition
+'visible' => [
+  [':input[name="field_a"]' => ['value' => 'yes']],
+  [':input[name="field_b"]' => ['value' => 'also_yes']],
+],
+```
+
+Available states: `visible`, `invisible`, `enabled`, `disabled`, `required`, `optional`, `checked`, `unchecked`, `expanded`, `collapsed`.
+
+## Managed File Upload
+
+```php
+$form['file'] = [
+  '#type'              => 'managed_file',
+  '#title'             => $this->t('CSV file'),
+  '#upload_location'   => 'public://imports/',
+  '#upload_validators' => [
+    'file_validate_extensions' => ['csv'],
+    'file_validate_size'       => [25 * 1024 * 1024], // 25MB
+  ],
+  '#default_value'     => $this->configuration['file_fid'] ? [$this->configuration['file_fid']] : [],
+];
+
+// In submitForm() — mark file as permanent
+$fid = $form_state->getValue('file')[0] ?? NULL;
+if ($fid) {
+  $file = \Drupal\file\Entity\File::load($fid);
+  $file->setPermanent();
+  $file->save();
+}
+```
+
+## Altering Another Module's Form
+
+```php
+// my_module.module
+
+// Alter a specific form by its form ID
+function my_module_form_node_article_form_alter(
+  array &$form,
+  FormStateInterface $form_state,
+  string $form_id,
+): void {
+  // Add a custom submit handler
+  $form['actions']['submit']['#submit'][] = 'my_module_node_article_submit';
+  // Add a custom validator
+  $form['#validate'][] = 'my_module_node_article_validate';
+}
+
+function my_module_node_article_submit(array &$form, FormStateInterface $form_state): void {
+  // Additional processing after the entity is saved.
+}
+```
+
+Use `hook_form_FORM_ID_alter()` for specific forms (preferred) or `hook_form_alter()` for all forms.
+
+## Form Routing
+
+```yaml
+my_module.settings:
+  path: '/admin/config/system/my-module'
+  defaults:
+    _form: '\Drupal\my_module\Form\SettingsForm'
+    _title: 'My Module Settings'
+  requirements:
+    _permission: 'administer site configuration'
+```
+
+## Key Rules Summary
+
+- Use `$this->t()` everywhere — never bare `t()` inside a class method.
+- `getFormId()` must return a globally unique string across all modules.
+- Validate in `validateForm()`, not `submitForm()`.
+- Redirect in `submitForm()` via `$form_state->setRedirectUrl()` — never with `header()`.
+- Use `ConfigFormBase` (not `FormBase`) for module configuration settings — it handles the "saved" message and editable config tracking.
+- Add `$form['actions']['#type'] = 'actions'` to group action buttons — themes style this properly.

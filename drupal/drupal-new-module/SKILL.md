@@ -9,7 +9,7 @@ argument-hint: [module-name] [brief description of what it does]
 
 You are creating a new Drupal module that follows this team's coding standards. Getting the structure right from the start prevents a class of technical debt — wrong namespaces, missing service definitions, procedural hooks that should be OOP, and missing config schemas all compound over time.
 
-**Rules library:** `/Users/hw/Library/CloudStorage/OneDrive-Personal/Books/drupal-rules/`
+**Rules library:** `rules/`
 
 ## Step 1: Gather requirements
 

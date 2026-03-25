@@ -9,7 +9,7 @@ argument-hint: [file-or-directory-path ...]
 
 You are reviewing Drupal code against this team's established coding standards. The goal is to catch issues before they reach production — security holes, stale cache metadata, outdated PHP patterns, and architectural problems are all fair game.
 
-**Rules library:** `/Users/hw/Library/CloudStorage/OneDrive-Personal/Books/drupal-rules/`
+**Rules library:** `rules/`
 
 Start by reading `README.md` in that directory for a quick map, then read only the rule files relevant to what you're reviewing. Don't load all 15 files — be surgical.
 
