@@ -9,19 +9,19 @@ argument-hint: [file-or-directory-path ...]
 
 You are reviewing Drupal code against this team's established coding standards. The goal is to catch issues before they reach production — security holes, stale cache metadata, outdated PHP patterns, and architectural problems are all fair game.
 
-**Rules library:** `rules/`
+**References library:** `references/`
 
-Start by reading `README.md` in that directory for a quick map, then read only the rule files relevant to what you're reviewing. Don't load all 15 files — be surgical.
+Start by reading `README.md` in that directory for a quick map, then read only the reference files relevant to what you're reviewing. Don't load all 15 files — be surgical.
 
 ## Step 1: Understand what to review
 
 If `$ARGUMENTS` contains file paths, read those files. If the user pasted code inline, work with that. If neither, ask: "What file or directory should I review?"
 
-Scan the code quickly to identify which rule categories apply before loading rule files.
+Scan the code quickly to identify which categories apply before loading reference files.
 
-## Step 2: Load relevant rules
+## Step 2: Load relevant references
 
-| Code contains... | Read this rule file |
+| Code contains... | Read this reference file |
 |---|---|
 | `*.info.yml`, module structure | `01-module-architecture.md` |
 | Services, `*.services.yml`, `create()` factory | `02-services-dependency-injection.md` |
@@ -63,7 +63,7 @@ Structure your output exactly like this:
 ---
 
 For each finding:
-- Cite the rule (e.g., "→ `10-security.md`: Never concatenate user input into SQL")
+- Cite the reference (e.g., "→ `10-security.md`: Never concatenate user input into SQL")
 - Show the problematic snippet
 - Show a corrected version
 
@@ -71,7 +71,7 @@ If there are no issues in a section, write "None found." — don't omit the sect
 
 ## High-value checks to run on every review
 
-These catch the most common Drupal 11 mistakes — worth checking even before reading the full rule files:
+These catch the most common Drupal 11 mistakes — worth checking even before reading the full reference files:
 
 **PHP / OOP patterns**
 - No `\Drupal::` static calls inside service classes (use constructor injection instead — statics break testability and the service container)

@@ -1,6 +1,6 @@
-# Drupal Development Rules
+# Drupal Development References
 
-These rules define the team standards for **Drupal 11 + PHP 8.5** development. Use these files as a checklist during code writing, review, and architecture decisions.
+These references define the team standards for **Drupal 11 + PHP 8.5** development. Use these files as a checklist during code writing, review, and architecture decisions.
 
 > **Target stack:** Drupal 11.x · PHP 8.4 minimum (8.5 recommended) · PHPUnit 11 · Drush 13
 
@@ -28,7 +28,7 @@ These rules define the team standards for **Drupal 11 + PHP 8.5** development. U
 
 ---
 
-## Quick-Reference: The Most Critical Rules
+## Quick-Reference: The Most Critical Standards
 
 ### Architecture
 - **Never put business logic in a theme.** If removing the theme breaks a feature, it belongs in a module.

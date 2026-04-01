@@ -9,7 +9,7 @@ argument-hint: [module-name] [brief description of what it does]
 
 You are creating a new Drupal module that follows this team's coding standards. Getting the structure right from the start prevents a class of technical debt — wrong namespaces, missing service definitions, procedural hooks that should be OOP, and missing config schemas all compound over time.
 
-**Rules library:** `rules/`
+**References library:** `references/`
 
 ## Step 1: Gather requirements
 
@@ -28,14 +28,14 @@ If the user hasn't provided enough information, ask:
    - [ ] Drush commands
    - [ ] Tests
 
-## Step 2: Load relevant rule files
+## Step 2: Load relevant reference files
 
 Always read these before generating:
 - `01-module-architecture.md` — structure, info.yml, naming conventions
 - `14-oop-hooks.md` — if the module needs hooks
 - `15-modern-php.md` — PHP 8.4/8.5 patterns that apply to all generated code
 
-Then read the relevant component rules:
+Then read the relevant component references:
 - `02-services-dependency-injection.md` — if services are needed
 - `03-plugins.md` — if plugins are needed
 - `04-entities.md` — if entities are needed
@@ -150,5 +150,5 @@ public function save(): void { ... }
 Tell the user:
 1. What files were created and why
 2. What to do next (e.g., "Run `drush cr` to clear caches after enabling the module")
-3. Which rule files to read for the next steps (e.g., "See `03-plugins.md` if you need to add more plugin types")
+3. Which reference files to read for the next steps (e.g., "See `03-plugins.md` if you need to add more plugin types")
 4. Any decisions that were made on their behalf (e.g., "I used `EditorialContentEntityBase` because you mentioned publishing workflow — change to `ContentEntityBase` if you don't need revision/publishing support")

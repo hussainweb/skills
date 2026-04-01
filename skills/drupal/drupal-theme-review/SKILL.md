@@ -9,30 +9,30 @@ argument-hint: [theme-file-or-directory ...]
 
 You are reviewing Drupal theme code against established Drupal 11 theming standards. Theming bugs are often subtle — a misused `|raw`, a missing cache context in a preprocess function, a `$(document).ready()` instead of `Drupal.behaviors`, or a missing `once()` call — and they can cause XSS vulnerabilities, stale content, or broken AJAX flows.
 
-**Rules library:** `rules/`
+**References library:** `references/`
 
-| Code contains… | Read this rule file |
+| Code contains… | Read this reference file |
 |---|---|
-| Twig templates (`*.html.twig`) | `rules/01-twig.md` |
-| `*.theme`, preprocess functions, template suggestions | `rules/02-preprocess.md` |
-| `*.libraries.yml`, CSS/JS asset definitions | `rules/03-libraries.md` |
-| JavaScript behaviors, `Drupal.behaviors`, `once()` | `rules/04-javascript.md` |
-| `components/`, `*.component.yml`, SDC | `rules/05-sdc.md` |
-| `*.info.yml`, `theme-settings.php`, breakpoints | `rules/06-theme-config.md` |
-| ARIA roles, skip links, `Drupal.announce`, color contrast | `rules/07-accessibility.md` |
-| `*.breakpoints.yml`, responsive image styles, `<picture>` | `rules/08-responsive-images.md` |
+| Twig templates (`*.html.twig`) | `references/01-twig.md` |
+| `*.theme`, preprocess functions, template suggestions | `references/02-preprocess.md` |
+| `*.libraries.yml`, CSS/JS asset definitions | `references/03-libraries.md` |
+| JavaScript behaviors, `Drupal.behaviors`, `once()` | `references/04-javascript.md` |
+| `components/`, `*.component.yml`, SDC | `references/05-sdc.md` |
+| `*.info.yml`, `theme-settings.php`, breakpoints | `references/06-theme-config.md` |
+| ARIA roles, skip links, `Drupal.announce`, color contrast | `references/07-accessibility.md` |
+| `*.breakpoints.yml`, responsive image styles, `<picture>` | `references/08-responsive-images.md` |
 
-Load only the rule files relevant to what you are reviewing — don't load all eight if the user only showed you a Twig template.
+Load only the reference files relevant to what you are reviewing — don't load all eight if the user only showed you a Twig template.
 
 ## Step 1: Understand what to review
 
 If `$ARGUMENTS` contains file paths, read those files. If the user pasted code inline, work with that. If neither, ask: "Which theme file or directory should I review?"
 
-Scan quickly: identify file types present to decide which rule files to load.
+Scan quickly: identify file types present to decide which reference files to load.
 
-## Step 2: Load relevant rules, then review
+## Step 2: Load relevant references, then review
 
-Read only the rules you need. Then produce the review using the structure below.
+Read only the references you need. Then produce the review using the structure below.
 
 ## Step 3: Output format
 
@@ -54,7 +54,7 @@ Read only the rules you need. Then produce the review using the structure below.
 ---
 
 For each finding:
-- Cite the rule file and principle (e.g., "→ `01-twig.md`: Never use `|raw` on user-supplied content")
+- Cite the reference file and principle (e.g., "→ `01-twig.md`: Never use `|raw` on user-supplied content")
 - Show the problematic snippet
 - Show a corrected version
 
@@ -62,7 +62,7 @@ If there are no issues in a section, write "None found." — don't omit the sect
 
 ## High-value checks (run on every theme review)
 
-These are the most common Drupal theming mistakes — check them before reading the full rule files:
+These are the most common Drupal theming mistakes — check them before reading the full reference files:
 
 **Twig / Security**
 - No `|raw` on user-supplied variables — Twig auto-escapes by default; `|raw` disables that protection
