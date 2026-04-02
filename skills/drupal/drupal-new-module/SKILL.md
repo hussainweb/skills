@@ -1,8 +1,8 @@
 ---
 name: drupal-new-module
-description: Scaffold a new Drupal 11 module following team standards: correct directory structure, PSR-4 namespaces, PHP 8.5 patterns, OOP hooks, and proper service definitions. Use this skill whenever someone wants to create a new Drupal module, add a plugin type, create a custom entity, or start a new Drupal component from scratch. Triggers on "create a module", "new drupal module", "scaffold a plugin", "I need a custom entity", "start a new module for X", or "help me set up the module structure for Y".
+description: Scaffold a new Drupal 11 module following team standards - correct directory structure, PSR-4 namespaces, PHP 8.5 patterns, OOP hooks, and proper service definitions. Use this skill whenever someone wants to create a new Drupal module, add a plugin type, create a custom entity, or start a new Drupal component from scratch.
 allowed-tools: Read, Write, Bash
-argument-hint: [module-name] [brief description of what it does]
+argument-hint: "<module-name> <brief description of what it does>"
 ---
 
 # Scaffold a New Drupal 11 Module

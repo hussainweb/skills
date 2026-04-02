@@ -1,8 +1,8 @@
 ---
 name: drupal-theme-review
-description: Review Drupal theme code — Twig templates, libraries, preprocess functions, JavaScript behaviors, Single Directory Components (SDC), accessibility, and responsive images — against Drupal 11 best practices. Use this skill whenever someone asks to review a Drupal theme, check a .theme file, audit Twig templates, look at a libraries.yml, validate SDC components, or asks questions like "is this Twig correct?", "is this the right way to do JS in Drupal?", "review my preprocess function", "is my libraries.yml correct?", "how should I structure my theme?", "is |raw safe here?", or "why is my cache broken in a Twig template?". Trigger even if the user just pastes a .html.twig file or shows theme PHP code without explicitly requesting a review.
+description: Review Drupal theme code - Twig templates, libraries, preprocess functions, JavaScript behaviors, Single Directory Components (SDC), accessibility, and responsive images - against Drupal 11 best practices. Use this skill whenever someone asks to review a Drupal theme, check a .theme file, audit Twig templates, look at a libraries.yml, or validate SDC components.
 allowed-tools: Read, Grep, Glob
-argument-hint: [theme-file-or-directory ...]
+argument-hint: "<theme-file-or-directory ...>"
 ---
 
 # Drupal Theme Review

@@ -1,8 +1,8 @@
 ---
 name: drupal-review
-description: Review Drupal code against team standards for Drupal 11, PHP 8.4/8.5, and modern best practices. Use this skill whenever someone asks to review a Drupal module, check a PR, audit Drupal architecture, validate that code follows standards, or asks questions like "is this the right way to do X in Drupal?", "does this follow Drupal standards?", "review my module", "check this plugin", "is this hook correct?", or "is this PHP pattern OK?". Trigger even if the user just says "look at this" and the context is clearly Drupal PHP code.
+description: Review Drupal code against team standards for Drupal 11, PHP 8.4/8.5, and modern best practices. Use this skill whenever someone asks to review a Drupal module, check a PR, audit Drupal architecture, or validate that code follows standards.
 allowed-tools: Read, Grep, Glob
-argument-hint: [file-or-directory-path ...]
+argument-hint: "<file-or-directory-path ...>"
 ---
 
 # Drupal Code Review
