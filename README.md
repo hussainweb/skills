@@ -1,40 +1,61 @@
-# Gemini CLI Skills
+# AI Coding Agent Skills
 
-A collection of specialized skills for the [Gemini CLI](https://github.com/google/gemini-cli) to enhance development workflows.
+A collection of specialized skills for AI coding agents to enhance development workflows. Skills are tool-agnostic instruction sets that work with any AI agent that supports the skills format (Gemini CLI, Claude Code, etc.).
 
-## 🚀 Usage
+## Installation
 
-To use these skills, ensure they are in your Gemini CLI skills directory (typically `~/.agents/skills/` or indexed in your workspace). You can activate a skill by name:
+Install all skills from this repository into your AI coding agent using the [`skills` CLI](https://skills.sh/docs/cli):
 
 ```bash
-# In a Gemini CLI session
-activate_skill drupal-new-module
+npx skills add hussainweb/skills
 ```
 
-## 📂 Categories
+This downloads the skills and configures them for use with your AI agent.
 
-### 💧 Drupal
-Modern Drupal development skills following Drupal 11+ and PHP 8.4/8.5 standards.
+## Available Skills
 
-- **[drupal-new-module](./drupal/drupal-new-module/SKILL.md)**: Scaffolds new Drupal 11 modules with PSR-4 namespaces, OOP hooks, and modern PHP patterns.
-- **[drupal-review](./drupal/drupal-review/SKILL.md)**: Reviews Drupal code against team standards, security best practices, and caching requirements.
+### Drupal
 
-## 🛠️ Repository Structure
+Modern Drupal development skills following Drupal 11+ and PHP 8.5 standards.
 
-The skills are organized by technology or domain:
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [drupal-new-module](./skills/drupal/drupal-new-module/SKILL.md) | `npx skills add hussainweb/skills@drupal-new-module` | Scaffold new Drupal 11 modules with PSR-4 namespaces, OOP hooks, and modern PHP patterns |
+| [drupal-review](./skills/drupal/drupal-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-review` | Review Drupal code against team standards, security best practices, and caching requirements |
+| [drupal-theme-review](./skills/drupal/drupal-theme-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-theme-review` | Review Drupal theme code — Twig templates, libraries, JS behaviors, SDC, accessibility, and responsive images |
+
+## Repository Structure
+
+Skills are organized by technology or domain under the `skills/` directory:
 
 ```text
-.
-├── drupal/                # Drupal-specific skills
-│   ├── drupal-new-module/ # Module scaffolding
-│   └── drupal-review/     # Code review and auditing
-└── README.md
+skills/
+└── drupal/
+    ├── drupal-new-module/
+    │   ├── SKILL.md
+    │   ├── references/
+    │   └── evals/
+    ├── drupal-review/
+    │   ├── SKILL.md
+    │   ├── references/
+    │   └── evals/
+    └── drupal-theme-review/
+        ├── SKILL.md
+        ├── references/
+        └── evals/
 ```
 
-## ✍️ Adding New Skills
+## Skill Anatomy
 
-Each skill should be contained in its own directory with:
-1. `SKILL.md`: The instruction set and metadata for the Gemini CLI.
-2. `evals/`: (Optional) Evaluation sets to test the skill's performance.
+Each skill lives in its own directory and contains:
 
-When adding a new category, create a new top-level directory and update this README.
+- **`SKILL.md`** — The instruction set and metadata (name, description, allowed tools, argument hints).
+- **`references/`** — Supporting reference documentation the skill can consult.
+- **`evals/`** — Evaluation sets to test the skill's output quality.
+
+## Adding New Skills
+
+1. Create a new directory under the appropriate category in `skills/` (or create a new category directory).
+2. Add a `SKILL.md` with frontmatter metadata and instructions.
+3. Optionally add `references/` and `evals/` directories.
+4. Update this README with the new skill.
