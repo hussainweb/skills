@@ -1,7 +1,6 @@
 ---
 name: hussainweb-writing-style
 description: Hussain Abbas (hussainweb) style guide. ALWAYS use to draft or edit blog posts, guides, TILs, and reflections. Ensures a conversational, empathetic, and structured voice automatically.
-license: MIT
 metadata: 
   authors: "Hussain Abbas"
   version: "1.2.0"
