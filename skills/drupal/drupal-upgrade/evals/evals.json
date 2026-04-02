@@ -1,0 +1,42 @@
+{
+  "skill_name": "drupal-upgrade",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We're on Drupal 10.3.8 and need to upgrade to Drupal 11. Our site has 15 custom modules, uses Classy as a base theme, and we haven't run any deprecation scans yet. Where do we start?",
+      "expected_output": "Should walk through Phase 1 (Assess): update to latest 10.3.x patch, install upgrade_status, run PHPStan, check contrib readiness. Should flag Classy as a known blocker (removed in D11) and recommend Starterkit migration. Should NOT enumerate specific removed D11 modules from memory — should say upgrade_status will identify those.",
+      "assertions": [
+        "Recommends installing and running upgrade_status module as the first step",
+        "Recommends running PHPStan or drupal-check on custom code",
+        "Flags Classy base theme as needing migration",
+        "Suggests Starterkit theme generation as the replacement approach",
+        "Does NOT produce a hardcoded list of removed D11 modules — defers to upgrade_status",
+        "References the upgrade rule files from the rules library"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Drupal Rector fixed most of our deprecations but we still have some hook_form_alter and hook_node_presave functions in .module files. Are those going to break in the next major version?",
+      "expected_output": "Should explain that procedural hooks still work but are being deprecated in favor of OOP #[Hook] classes. Should reference 14-oop-hooks.md. Should recommend migrating to OOP hooks proactively but clarify they won't break immediately in the next major — the OOP hook system is the direction, not yet a hard requirement for all hooks.",
+      "assertions": [
+        "Explains the OOP hook migration direction without claiming procedural hooks are immediately broken",
+        "References 14-oop-hooks.md from the rules library",
+        "Shows the #[Hook] attribute pattern as the replacement",
+        "Recommends proactive migration as part of upgrade prep",
+        "Mentions hooks_converted: true info.yml flag"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Our composer update to the next major version failed with dependency conflicts. How do we debug this?",
+      "expected_output": "Should recommend `composer why-not drupal/core:^NEXT` to identify what is blocking. Should explain that contrib modules pinning old core versions are the most common cause. Should suggest checking each blocking module for a compatible release, applying a patch, or finding an alternative.",
+      "assertions": [
+        "Recommends composer why-not as the diagnostic tool",
+        "Identifies contrib version constraints as the most common blocker",
+        "Suggests checking drupal.org for compatible releases",
+        "Mentions patching or finding alternatives as fallback options",
+        "Does not suggest force-overriding Composer constraints"
+      ]
+    }
+  ]
+}
