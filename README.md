@@ -24,12 +24,25 @@ Modern Drupal development skills following Drupal 11+ and PHP 8.5 standards.
 | [drupal-review](./skills/drupal/drupal-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-review` | Review Drupal code against team standards, security best practices, and caching requirements |
 | [drupal-theme-review](./skills/drupal/drupal-theme-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-theme-review` | Review Drupal theme code — Twig templates, libraries, JS behaviors, SDC, accessibility, and responsive images |
 
+### DDEV
+
+Local development environment management with DDEV.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [ddev](./skills/ddev/ddev/SKILL.md) | `npx skills add hussainweb/skills@ddev` | Guide command execution in DDEV-based projects — route commands through containers, manage add-ons, and configure services |
+
 ## Repository Structure
 
 Skills are organized by technology or domain under the `skills/` directory:
 
 ```text
 skills/
+├── ddev/
+│   └── ddev/
+│       ├── SKILL.md
+│       ├── references/
+│       └── evals/
 └── drupal/
     ├── drupal-new-module/
     │   ├── SKILL.md
