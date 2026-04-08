@@ -1,7 +1,7 @@
 ---
 name: hussainweb-writing-style
 description: Hussain Abbas (hussainweb) style guide. ALWAYS use to draft or edit blog posts, guides, TILs, and reflections. Ensures a conversational, empathetic, and structured voice automatically.
-metadata: 
+metadata:
   authors: "Hussain Abbas"
   version: "1.2.0"
 ---
@@ -39,6 +39,7 @@ This guide captures the unique writing style of Hussain Abbas, derived from over
 - **Emphasis:** Use **bolding** sparingly for key terms, file names, or to highlight parts of a command. Use *italics* for subtle emphasis or when introducing a new term. Use both sparingly to avoid visual clutter.
 - **Bullet Points:** Use bolding at the start of bullet points to highlight the core concept.
 - **Code Blocks:** Use backticks for inline code and triple backticks for blocks. Specify the language where possible.
+- **No Trailing Spaces:** Do not include trailing spaces at the end of lines.
 
 ---
 
