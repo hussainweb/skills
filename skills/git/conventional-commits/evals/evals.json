@@ -1,0 +1,73 @@
+[
+  {
+    "id": 1,
+    "prompt": "Commit the staged changes. I fixed a null pointer exception in the user authentication module.",
+    "expected_output": "The agent should produce a commit message like `fix(auth): resolve null pointer exception in user authentication`. It must use the `fix` type since this is a bug fix. It should check `git diff --cached` and `git log` first. It must NOT include any Co-Authored-By or Signed-off-by trailer attributing an AI.",
+    "assertions": [
+      "uses_fix_type",
+      "includes_description_in_imperative_mood",
+      "no_ai_co_author_trailer",
+      "checks_staged_changes_first",
+      "uses_heredoc_for_commit"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "I just added a new search feature to the API. Please commit it.",
+    "expected_output": "The agent should produce a commit message like `feat(api): add search endpoint` or `feat: add search feature to API`. It must use the `feat` type since this is a new feature. No AI attribution footers.",
+    "assertions": [
+      "uses_feat_type",
+      "description_starts_lowercase",
+      "description_has_no_trailing_period",
+      "no_ai_co_author_trailer"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "Commit these changes. I removed the deprecated v1 API endpoints and consumers will need to migrate to v2.",
+    "expected_output": "The agent should recognize this as a breaking change and use `feat(api)!: remove deprecated v1 endpoints` or similar, and/or include a `BREAKING CHANGE:` footer explaining the migration requirement. The BREAKING CHANGE footer must be uppercase.",
+    "assertions": [
+      "indicates_breaking_change_via_bang_or_footer",
+      "breaking_change_footer_is_uppercase_if_present",
+      "no_ai_co_author_trailer",
+      "body_or_footer_explains_migration"
+    ],
+    "files": []
+  },
+  {
+    "id": 4,
+    "prompt": "Please commit. I reorganized the utility functions into separate modules but didn't change any behavior.",
+    "expected_output": "The agent should use the `refactor` type since this is a code restructuring with no behavior change. Something like `refactor: extract utility functions into separate modules`. It may include a body explaining why. No AI attribution.",
+    "assertions": [
+      "uses_refactor_type",
+      "does_not_use_feat_or_fix",
+      "no_ai_co_author_trailer",
+      "uses_imperative_mood"
+    ],
+    "files": []
+  },
+  {
+    "id": 5,
+    "prompt": "Commit this. I updated the README with installation instructions and added a CONTRIBUTING.md file.",
+    "expected_output": "The agent should use the `docs` type since only documentation changed. Something like `docs: add installation instructions and contributing guide`. No AI attribution.",
+    "assertions": [
+      "uses_docs_type",
+      "no_ai_co_author_trailer",
+      "description_under_72_characters"
+    ],
+    "files": []
+  },
+  {
+    "id": 6,
+    "prompt": "I upgraded React from 17 to 18 and updated the webpack config. Please commit.",
+    "expected_output": "The agent should use the `build` type with an appropriate scope like `deps`. Something like `build(deps): upgrade React to v18 and update webpack config`. No AI attribution.",
+    "assertions": [
+      "uses_build_type",
+      "no_ai_co_author_trailer",
+      "checks_git_log_for_scope_conventions"
+    ],
+    "files": []
+  }
+]
