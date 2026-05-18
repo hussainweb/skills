@@ -114,17 +114,16 @@ When asked to commit, or when you determine a commit is needed:
 2. Run `git log --oneline -10` to see recent commit style and any existing scope conventions.
 3. Classify the change using the type selection guide above.
 4. Write the commit message following the format rules.
-5. Use a HEREDOC to pass the message to `git commit` for correct formatting:
+5. Use a HEREDOC and pipe it to `git commit -F -` to ensure correct formatting and avoid shell substitution issues:
 
 ```bash
-git commit -m "$(cat <<'EOF'
+cat <<'EOF' | git commit -F -
 type(scope): description
 
 Optional body explaining why.
 
 Optional-Footer: value
 EOF
-)"
 ```
 
 ## Examples
