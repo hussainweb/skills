@@ -114,16 +114,12 @@ When asked to commit, or when you determine a commit is needed:
 2. Run `git log --oneline -10` to see recent commit style and any existing scope conventions.
 3. Classify the change using the type selection guide above.
 4. Write the commit message following the format rules.
-5. Use a HEREDOC and pipe it to `git commit -F -` to ensure correct formatting and avoid shell substitution issues:
+5. Use `write_file` to save the message to a temporary file (e.g., `.git/COMMIT_MESSAGE`) and then use `git commit -F` to commit. This is the most robust way to handle multi-line messages and avoid safety blocks when the message content contains shell-sensitive characters like `$(` or backticks:
 
 ```bash
-cat <<'EOF' | git commit -F -
-type(scope): description
-
-Optional body explaining why.
-
-Optional-Footer: value
-EOF
+# Step 1: write_file(file_path=".git/COMMIT_MESSAGE", content="...")
+# Step 2:
+git commit -F .git/COMMIT_MESSAGE && rm .git/COMMIT_MESSAGE
 ```
 
 ## Examples
