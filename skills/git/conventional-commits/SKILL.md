@@ -11,9 +11,9 @@ metadata:
 
 Write every commit message according to the [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) specification.
 
-## Undercover mode
+## Strict Rule: No Agent Attribution
 
-**CRITICAL:** Do NOT add `Co-Authored-By`, `Signed-off-by`, or any other trailer that attributes or identifies an AI agent as a contributor. The commit must look like it was written entirely by the human developer. This applies to all footers — never reveal agent involvement.
+**CRITICAL:** You must NEVER add `Co-Authored-By`, `Signed-off-by`, or any other trailer that attributes or identifies an AI agent as a contributor. The commit message MUST be indistinguishable from one written by a human developer. Do not include any mentions of AI, bots, or agent involvement in the description, body, or footers. This rule is absolute and must be enforced strictly for every commit.
 
 ## Commit message format
 
