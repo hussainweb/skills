@@ -32,12 +32,25 @@ Local development environment management with DDEV.
 |-------|---------|-------------|
 | [ddev](./skills/ddev/ddev/SKILL.md) | `npx skills add hussainweb/skills@ddev` | Guide command execution in DDEV-based projects — route commands through containers, manage add-ons, and configure services |
 
+### Atlassian
+
+Drive Atlassian Cloud products from the command line.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [acli](./skills/atlassian/acli/SKILL.md) | `npx skills add hussainweb/skills@acli` | Drive Atlassian Cloud (Jira and Confluence) via the `acli` CLI — work items, projects, boards, sprints, pages, spaces, and blogs, with API-token authentication |
+
 ## Repository Structure
 
 Skills are organized by technology or domain under the `skills/` directory:
 
 ```text
 skills/
+├── atlassian/
+│   └── acli/
+│       ├── SKILL.md
+│       ├── references/
+│       └── evals/
 ├── ddev/
 │   └── ddev/
 │       ├── SKILL.md

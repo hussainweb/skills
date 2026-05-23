@@ -1,0 +1,85 @@
+{
+  "skill_name": "acli",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I need to authenticate acli for Jira on the site `mysite.atlassian.net` using my API token. The token is in ~/.atlassian/jira-token.txt and my email is user@example.com. What command should I run?",
+      "expected_output": "Recommends `acli jira auth login --site \"mysite.atlassian.net\" --email \"user@example.com\" --token < ~/.atlassian/jira-token.txt`, explains the `--token` flag is a switch reading from stdin (not a value-bearing flag), and reminds the user to authenticate Confluence separately if needed.",
+      "files": [],
+      "expectations": [
+        "Recommends `acli jira auth login` (the per-product Jira command), not the global `acli auth login`",
+        "Uses the `--token` flag as a stdin switch with no value (e.g., `--token < file` or `cat file | ... --token`)",
+        "Includes `--site \"mysite.atlassian.net\"` exactly as a bare hostname (no scheme, no trailing slash)",
+        "Includes `--email \"user@example.com\"`",
+        "References the token file path `~/.atlassian/jira-token.txt`",
+        "Explains that `--token` reads from stdin (it's a switch, not a value-bearing flag)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "List all my team's in-progress Jira issues in project FOO that aren't assigned to anyone, then transition them to 'To Do'. Use acli.",
+      "expected_output": "First runs `acli jira workitem search --jql \"project = FOO AND status = 'In Progress' AND assignee is EMPTY\" --json` (or similar) to view the scope and confirm with the user. Only after confirmation runs `acli jira workitem transition --jql \"...\" --status \"To Do\"`. Avoids using `--yes` without confirmation.",
+      "files": [],
+      "expectations": [
+        "Recommends running `acli jira workitem search` (a read/preview step) BEFORE the transition, not just the transition by itself",
+        "JQL clause targets `project = FOO`",
+        "JQL clause includes an in-progress status (e.g. `status = \"In Progress\"` or `statusCategory = \"In Progress\"`)",
+        "JQL clause includes `assignee is EMPTY` (or equivalent unassigned check)",
+        "Recommends `acli jira workitem transition ... --status \"To Do\"`",
+        "Does NOT silently include `--yes` on the transition without first verifying scope, OR explicitly calls out that `--yes` should only follow scope confirmation",
+        "Uses `workitem` (not `issue`) as the subcommand"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to fetch a Confluence page (ID 87654321) and get its raw storage-format content so I can repost it elsewhere.",
+      "expected_output": "Runs `acli confluence page view --id 87654321 --body-format storage --json` and explains that `storage` is Confluence's XHTML-with-macros format suitable for round-tripping.",
+      "files": [],
+      "expectations": [
+        "Uses `acli confluence page view`",
+        "Includes `--id 87654321`",
+        "Includes `--body-format storage`",
+        "Explains that `storage` is the Confluence XHTML format suitable for round-tripping (vs `view` rendered HTML or `atlas_doc_format` ADF)",
+        "Suggests `--json` output to make the storage body easily extractable"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Create a new Confluence space with key ENG, name 'Engineering', and a brief description 'Engineering team docs'. Then list all spaces in JSON.",
+      "expected_output": "Runs `acli confluence space create --key ENG --name \"Engineering\" --description \"Engineering team docs\"` followed by `acli confluence space list --json`. Doesn't conflate space ID and space key (create takes --key, view takes --id).",
+      "files": [],
+      "expectations": [
+        "Uses `acli confluence space create` with `--key ENG`",
+        "Uses `--name \"Engineering\"`",
+        "Uses `--description \"Engineering team docs\"`",
+        "Includes a follow-up `acli confluence space list --json` command",
+        "Presents the two commands in correct order (create first, then list)"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Add a comment 'Reviewed, looks good!' on Jira issue PROJ-456 using acli.",
+      "expected_output": "Runs `acli jira workitem comment create --key PROJ-456 --body \"Reviewed, looks good!\"`. Doesn't reach for the REST API or invent a flag.",
+      "files": [],
+      "expectations": [
+        "Uses `acli jira workitem comment create` (with `workitem`, not `issue`)",
+        "Targets via `--key \"PROJ-456\"` (or `--key PROJ-456`)",
+        "Uses `--body \"Reviewed, looks good!\"`",
+        "Does not invent flags or commands that don't exist in acli"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "How do I authenticate acli with my Atlassian token? Token value is `ATATT3xFfGF0abc123`.",
+      "expected_output": "Explicitly does NOT put the token on the command line. Recommends piping (e.g., `echo \"$TOKEN\" | acli jira auth login --site ... --email ... --token`) or reading from a file via stdin. Asks for the site and email if not given.",
+      "files": [],
+      "expectations": [
+        "Warns the user that the token was exposed in chat and recommends rotation",
+        "Does NOT put the literal token value (`ATATT3xFfGF0abc123`) directly on the command line as a flag value",
+        "Recommends the `--token` stdin pattern (file redirection or pipe), not `--token \"<value>\"`",
+        "Asks the user for the missing site and/or email (the prompt did not supply them)",
+        "Mentions that `acli jira auth login` and `acli confluence auth login` are separate (auth is per-product), or asks which product"
+      ]
+    }
+  ]
+}
