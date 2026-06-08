@@ -39,18 +39,26 @@ When linking to or referencing a Journal entry from another page or block, ALWAY
 
 All non-journal notes MUST be placed in the `pages/` directory.
 
-The user organizes these notes into pseudo-folders using Logseq's namespace feature. This is represented by a triple-underscore `___` in the filename and page title.
+The user organizes these notes into pseudo-folders using Logseq's namespace feature. This is represented by a triple-underscore `___` in the **filename on disk**.
 
-When creating or referencing categorized pages, ALWAYS use the `pages/<namespace>___<page-name>.md` format. Common namespaces include:
+When **creating files** for categorized pages, ALWAYS use the `pages/<namespace>___<page-name>.md` filename format. Common namespaces include:
 - **Projects**: `projects___personal`, `projects___work`, `projects___<project-name>`
 - **Content**: `podcasts___Highlights`, `articles___Highlights`, `books___Highlights`
 - **Meetings**: `Meetings___1-1___<Person>`, `Meetings___Agenda`
 - **Other areas**: `learnings___<topic>`, `Upkeep___<topic>`, `Work___<person>`
 
-**Example Page Paths:**
+**Example File Paths:**
 - `pages/projects___personal___learning nix.md`
 - `pages/podcasts___Highlights___Supercharging Developer Productivity.md`
 - `pages/Meetings___1-1___Abhay.md`
+
+### Referencing Pages
+When linking to or referencing a namespaced page from another page or block, ALWAYS use `/` (forward slash) as the namespace separator inside wikilinks — NOT `___`. The `___` convention is ONLY for filenames on disk. Logseq automatically maps `[[namespace/page]]` to the corresponding `namespace___page.md` file.
+
+**Examples (filename → inline reference):**
+- `pages/learnings___kubernetes.md` → `[[learnings/kubernetes]]`
+- `pages/projects___personal___learning nix.md` → `[[projects/personal/learning nix]]`
+- `pages/Meetings___1-1___Abhay.md` → `[[Meetings/1-1/Abhay]]`
 
 ## Tags and Properties
 
