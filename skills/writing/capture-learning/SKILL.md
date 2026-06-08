@@ -1,14 +1,39 @@
 ---
 name: capture-learning
-description: Automatically or manually captures technical realizations, "aha!" moments, and new understandings, documenting them in the user's Logseq vault using established organization conventions. Triggers when the user says things like "I just realized", "capture this learning", or when the agent helps resolve a complex issue and uncovers how a system fundamentally works.
+description: >-
+  Auto-capture technical realizations to Logseq when the user shares how
+  tools/systems actually work. PROACTIVELY invoke without waiting to be asked.
+  Pattern: declarative statements (not questions) revealing expectation vs
+  reality — 'didn't know X does Y', 'turns out Z', '[tool] actually
+  [behavior]', 'figured out why', 'the reason is', 'good to know', 'oh
+  interesting', 'TIL', 'wait so', 'huh'. Save: non-obvious behaviors,
+  corrected assumptions, debugged root causes, system quirks, newly discovered
+  CLI flags or options. Skip: questions, task requests, trivial fixes,
+  secondhand info (something a colleague found). Manual trigger: user says
+  'capture/save/document this learning'.
 ---
 # Capture Learning
 
 This skill captures and documents technical realizations and learnings directly into the user's Logseq vault (`/Users/hw/logseq`).
 
 ## Trigger Conditions
-- **Manual**: The user explicitly asks to "document this", "capture this learning", or "save this realization".
-- **Automatic**: When you (the agent) and the user figure out how something complex works under the hood (e.g., resolving a tricky bug, understanding an undocumented API, or grasping a framework's architecture), proactively ask the user: *"Would you like me to document this learning in your Logseq vault?"*
+
+- **Manual**: The user explicitly says "document this", "capture this learning", "save this realization", "TIL", or similar.
+- **Automatic** — Proactively capture (then confirm) when the user:
+  - Shares a debugging root cause that turned out to be non-obvious (e.g., "turns out `ignore_changes` doesn't apply to computed attributes")
+  - Expresses surprise or correction about how something works ("I didn't know", "oh interesting", "huh", "good to know", "wait so X actually…")
+  - Discovers a CLI flag, config option, or tool behavior they hadn't encountered before
+  - Has a mental model shift — their understanding of a system fundamentally changes
+  - Resolves a confusing bug and the fix reveals how the system actually behaves
+
+  In these cases, capture the learning first, then say something like: *"I've saved this to your Logseq vault — let me know if you'd like to adjust the wording."*
+
+## When NOT to trigger
+- Routine changes with no new insight (simple refactors, typo fixes, straightforward tasks)
+- Information the user clearly already knew and was just explaining to you
+- Secondhand info — something a colleague or someone else discovered, not the user
+- Generic best practices that aren't specific to the user's stack or project
+- The user is asking a question (not sharing a realization)
 
 ## Execution Workflow
 
