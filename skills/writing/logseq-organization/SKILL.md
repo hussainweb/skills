@@ -42,13 +42,28 @@ All non-journal notes MUST be placed in the `pages/` directory.
 The user organizes these notes into pseudo-folders using Logseq's namespace feature. This is represented by a triple-underscore `___` in the **filename on disk**.
 
 When **creating files** for categorized pages, ALWAYS use the `pages/<namespace>___<page-name>.md` filename format. Common namespaces include:
-- **Projects**: `projects___personal`, `projects___work`, `projects___<project-name>`
+- **Projects**: `projects___<type>___<project-name>` (see **Project Types** below)
 - **Content**: `podcasts___Highlights`, `articles___Highlights`, `books___Highlights`
 - **Meetings**: `Meetings___1-1___<Person>`, `Meetings___Agenda`
 - **Other areas**: `learnings___<topic>`, `Upkeep___<topic>`, `Work___<person>`
 
+### Project Types
+
+Projects live under the `projects` namespace and are further organized by type. Known project types:
+
+| Type | Description | Example filename |
+|------|-------------|-----------------|
+| `work` | Projects at work | `pages/projects___work___platform migration.md` |
+| `personal` | Hobby projects and experiments | `pages/projects___personal___learning nix.md` |
+| `khidmat` | Volunteer projects for the user's community | `pages/projects___khidmat___event website.md` |
+
+> [!IMPORTANT]
+> When creating a new project page and the project type is **not obvious from context**, you MUST ask the user which type it is before creating the file. Do not guess. The user may also specify a type not listed above — use whatever they provide.
+
 **Example File Paths:**
 - `pages/projects___personal___learning nix.md`
+- `pages/projects___work___ci pipeline revamp.md`
+- `pages/projects___khidmat___event website.md`
 - `pages/podcasts___Highlights___Supercharging Developer Productivity.md`
 - `pages/Meetings___1-1___Abhay.md`
 
