@@ -27,10 +27,13 @@ Within these files, the user categorizes their entries using second-level headin
 **Example Journal Entry (`journals/2026_05_30.md`):**
 ```markdown
 - ## #learnings
-	- Learned about how VerticalPodAutoscaler works in Kubernetes.
+	- Learned about how VerticalPodAutoscaler works in Kubernetes. #kubernetes
 - ## #links
 	- [How I write HTTP services in Go](https://grafana.com/...)
 ```
+
+### Content Guidelines
+- When writing entries under categories like `#learnings` or `#achievements`, **always focus on meaningful text first** for the top line. Do not start the line with tags; place any high-level tags at the end of the line or in nested blocks.
 
 ### Referencing Journals
 When linking to or referencing a Journal entry from another page or block, ALWAYS use the format `[[D MMM YYYY]]` or `[[DD MMM YYYY]]` (e.g., `[[1 Jun 2026]]`, `[[15 Aug 2025]]`). Do not use the file name format (`YYYY_MM_DD`) for inline references.
@@ -75,9 +78,18 @@ When linking to or referencing a namespaced page from another page or block, ALW
 - `pages/projects___personal___learning nix.md` → `[[projects/personal/learning nix]]`
 - `pages/Meetings___1-1___Abhay.md` → `[[Meetings/1-1/Abhay]]`
 
+### Organizational Priority
+To prevent duplicate root-level pages and maintain a clean vault:
+- **Namespaces > Hashtags**: If a namespaced page exists (e.g., `[[learnings/VAPID]]`), ALWAYS use that link instead of a generic hashtag (e.g., `#VAPID`).
+- **Avoid Root Tags for Namespaces**: Generic and high-level tags are perfectly fine. However, never use hashtags for topics that have a dedicated home in a namespace.
+- **Link Format**: Use the wikilink format `[[namespace/page]]` in the daily journal to correctly reference the corresponding `pages/namespace___page.md` file.
+
 ## Tags and Properties
 
 Pages and blocks are categorized using Logseq properties, primarily `tags::` and `category::`.
+
+> [!NOTE]
+> Generic and high-level tags are fine and encouraged. However, do not use `#tagname` for topics that are already organized into namespaces. Liberal use of hashtags for namespaced topics creates duplicate pages at the root of the vault.
 
 1. **Format**: 
    - If a tag is a single word (no spaces), prefix it with `#`: `#tagname`
