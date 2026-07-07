@@ -137,7 +137,47 @@ acli jira workitem comment delete --key PROJ-1 --id <comment-id>
 acli jira workitem comment visibility --key PROJ-1   # see visibility options
 ```
 
-Bodies accept plain text or ADF (Atlassian Document Format) JSON. Plain text is fine for most uses.
+Bodies accept plain text or ADF (Atlassian Document Format) JSON. Plain text is fine for most uses. `comment create` takes `--body`/`--body-file` (both accept plain text or ADF); `comment update` additionally exposes `--body-adf <file.json>` for an explicit ADF body.
+
+### Mentioning people (@-tags)
+
+A live @mention is **not** achievable by typing `@Name` as plain text — that renders as inert text. A real tag requires an ADF `mention` node whose `attrs.id` is the person's Atlassian **accountId**:
+
+```json
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "mention", "attrs": { "id": "<accountId>", "text": "@Display Name" } },
+        { "type": "text", "text": " — please take a look when you get a chance." }
+      ]
+    }
+  ]
+}
+```
+
+Post it with `comment update --key PROJ-1 --id <comment-id> --body-adf mention.json` (or `comment create --key PROJ-1 --body-file mention.json`). Preserving paragraph breaks and links across an edit is itself a reason to author the body as ADF rather than a flat string — a plain-text re-edit collapses formatting.
+
+### Finding a person's accountId
+
+`acli` has **no user-search command**, so getting an accountId takes a little indirection. Two things to know:
+
+- **`comment list --json` does *not* help** — it flattens each comment's author to a display name string, with no accountId. Don't stop here and conclude the ID is unavailable.
+- **`workitem view --json` *does* carry it.** The raw field payload includes full identity objects, each with `accountId`, for every people-valued field: `assignee`, `reporter`, `creator`, and people-typed custom fields. If the person you want to tag holds any such role on an accessible issue, their accountId is already in reach:
+
+```bash
+acli jira workitem view PROJ-123 --json --fields assignee,reporter,creator
+# -> fields.assignee.accountId  = "712020:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+#    fields.reporter.accountId  = "..."   (may be null if unset)
+#    fields.assignee.displayName / .emailAddress also present for verification
+```
+
+The accountId format is either a plain UUID-like string or a prefixed form such as `<realm>:<uuid>`; pass it verbatim into the mention node's `attrs.id`.
+
+Other sources when no issue field carries the person: watchers on an issue expose account IDs (`watcher remove` even takes `--account-id`), and a user's Atlassian profile URL ends in `/people/<accountId>`. Prefer the `workitem view --json` route first — it's fully within `acli` and needs no external lookup.
 
 ## Links
 

@@ -4,7 +4,7 @@ description: Drive Atlassian Cloud (Jira and Confluence) from the command line v
 allowed-tools: Bash, Read, Grep, Glob
 metadata:
   authors: "Hussain Abbas"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Atlassian CLI (acli) Guide
