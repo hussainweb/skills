@@ -84,6 +84,15 @@ acli confluence page       (view)
                 blog       (create | list | view)
 ```
 
+**Some of those are command *groups*, not verbs.** `comment`, `link`, `watcher`, and `attachment` require a further subcommand (`comment create`, `comment list`, `link create`, …) — and their flags live on the subcommand, not the group. Also note that most write commands target items via `--key`, not a positional argument:
+
+```bash
+acli jira workitem comment PROJ-1 --body "hi"              # ✗ unknown flag: --body
+acli jira workitem comment create --key PROJ-1 --body "hi" # ✓
+```
+
+Only `view` and `link list` take the key positionally. When in doubt, run `acli jira workitem <group> --help` to list subcommands before composing a call.
+
 When the user says "issue" or "ticket" or "story" or "bug" — they mean a **work item**. `acli` renamed `issue` to `workitem` to align with Jira's modern terminology. The work item is the unit of work; its `type` field is what makes it a Bug/Story/Task/Epic.
 
 ## Step 4 — Use JSON/CSV output when you'll consume the result
