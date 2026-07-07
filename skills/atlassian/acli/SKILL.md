@@ -4,7 +4,7 @@ description: Drive Atlassian Cloud (Jira and Confluence) from the command line v
 allowed-tools: Bash, Read, Grep, Glob
 metadata:
   authors: "Hussain Abbas"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Atlassian CLI (acli) Guide
@@ -127,6 +127,7 @@ The SKILL.md body above is the common path. Load these only when the task needs 
 | Projects, boards, sprints, filters, fields, dashboards | `references/03-jira-structure.md` |
 | Viewing Confluence pages (incl. body formats, versions, child pages) | `references/04-confluence-pages.md` |
 | Confluence spaces and blogs | `references/05-confluence-spaces-blogs.md` |
+| Authoring rich-text bodies (paragraphs, links, mentions) in ADF | `references/06-adf.md` |
 
 Each reference is a focused command table with flags, examples, and the gotchas that matter in practice.
 
