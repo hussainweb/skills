@@ -87,6 +87,15 @@ acli confluence auth logout
 
 `Authentication Type: api_token` confirms the user is on the token flow (vs OAuth).
 
+## Where auth state lives — and why it isn't reusable
+
+acli stores its per-product auth state in YAML files under `~/.config/acli/` (e.g. `jira_config.yaml`, `confluence_config.yaml`, `global_auth_config.yaml`). The config files list each registered `(site, email)` pair; credentials themselves are held by acli, not exposed for reuse.
+
+Two practical consequences:
+
+- **acli auth ≠ a REST credential.** When acli lacks a capability and you're tempted to fall back to `curl` against the REST API, you cannot borrow acli's session. An env var like `JIRA_API_TOKEN` on the machine is *not necessarily* the same token acli registered, and may belong to a different site or account entirely — verify independently before using it, and don't probe multiple identity/site combinations to find one that works. If a REST fallback is genuinely needed, ask the user for the right credential.
+- **Reading the config is the fast way to answer "which sites/emails are registered?"** — `grep` the YAML for `site:`/`email:` lines rather than re-running `auth status` per product. Never print token/secret fields.
+
 ## Multiple sites / multiple accounts
 
 You can `auth login` once per `(site, email)` pair and switch between them. The per-product state means `acli jira auth switch` does not affect Confluence — switch each product independently.
