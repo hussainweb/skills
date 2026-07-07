@@ -130,6 +130,15 @@ The SKILL.md body above is the common path. Load these only when the task needs 
 
 Each reference is a focused command table with flags, examples, and the gotchas that matter in practice.
 
+## Known capability gaps
+
+Things `acli` cannot do, so you don't burn time hunting for them. When one of these blocks the task, say so and fall back to the Jira UI or REST API (note: acli's stored auth is not reusable for REST — see `references/01-authentication.md`).
+
+- **No user search.** There is no `acli jira user` subtree — no name/email → accountId lookup. Harvest accountIds from `workitem view --json` people fields instead (see `references/02-jira-workitems.md`).
+- **No single-comment read.** There is no `comment get`, and `comment list --json` is lossy — a comment's raw ADF body cannot be retrieved through acli at all. To edit a formatted comment, reconstruct the body as ADF.
+- **No transition listing.** `transition` requires a valid target status name, but nothing enumerates the available transitions — inspect the workflow in the Jira UI if a transition fails.
+- **No `watcher add` or `attachment add`.** Only `list`/`remove` (watchers) and `list`/`delete` (attachments) exist.
+
 ## Key principles
 
 **Read before you write.** When the user asks you to edit, transition, or delete a work item, first `view` (or `search`) it to confirm you have the right one. `acli jira workitem edit --jql "..."` without `--yes` will at least prompt, but a misformed JQL can match hundreds of issues — confirm scope before committing.
