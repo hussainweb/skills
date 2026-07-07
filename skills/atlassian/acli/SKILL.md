@@ -107,6 +107,15 @@ acli confluence space list --json
 
 For multi-page results, use `--paginate` to walk through everything, or `--limit N` to cap.
 
+**The JSON shape is *not* uniform across commands — and some are lossy.** Each command's `--json` is stable release-to-release, but different commands return very different levels of fidelity:
+
+- `workitem view --json` returns the **raw Jira REST payload**: full `fields`, `changelog`, `renderedFields`, and complete identity objects (`accountId`, `displayName`, `emailAddress`) for people-valued fields.
+- `comment list --json` returns a **simplified, lossy** shape: the author is flattened to a display-name string (no accountId) and the body is flattened to plain text (ADF structure, mentions, and links stripped). It is not round-trippable — never use it as the source for re-posting or editing a formatted comment.
+
+If a lossy view is missing data you need (e.g. an accountId), check whether a richer command exposes it before concluding acli can't provide it — `workitem view --json` is usually the richest surface.
+
+Human-readable output is also expensive to consume: it renders heavy ANSI box-drawing tables (a modest comment list can exceed 30 KB of terminal output). Any output you'll parse or reason over should be `--json`.
+
 ## Step 5 — Use the right reference for depth
 
 The SKILL.md body above is the common path. Load these only when the task needs the detail:

@@ -137,6 +137,8 @@ acli jira workitem comment delete --key PROJ-1 --id <comment-id>
 acli jira workitem comment visibility --key PROJ-1   # see visibility options
 ```
 
+**`comment list --json` is lossy.** It flattens the author to a display-name string and the body to plain text — ADF structure, mentions, links, and accountIds are all stripped. Use it to find comment IDs and skim content, never as the source of truth for a comment's formatted body.
+
 Bodies accept plain text or ADF (Atlassian Document Format) JSON. Plain text is fine for most uses. `comment create` takes `--body`/`--body-file` (both accept plain text or ADF); `comment update` additionally exposes `--body-adf <file.json>` for an explicit ADF body.
 
 ### Mentioning people (@-tags)
