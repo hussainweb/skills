@@ -1,7 +1,7 @@
 ---
 name: conventional-commits
-description: Write commit messages following the Conventional Commits v1.0.0 specification. ALWAYS use this skill when creating git commits — whether via `git commit`, interactive rebase message editing, or any other commit workflow. Triggers on "commit", "git commit", "create a commit", "commit message", or any action that produces a git commit message.
-allowed-tools: Bash, Read, Grep, Glob
+description: Write commit messages following the Conventional Commits v1.0.0 specification. ALWAYS use this skill for any workflow that produces or edits a git commit — `git commit`, `git commit --amend`, interactive rebase message editing, or a step that implies a commit such as opening a pull request, squashing, or staging work to push. Triggers on "commit", "git commit", "commit message", "amend", "squash", "create a PR", "open a pull request", "gh pr create", or any action that produces or edits a git commit message.
+allowed-tools: Bash, Read, Write, Grep, Glob
 metadata:
   authors: "Hussain Abbas"
   version: "1.0.0"
@@ -108,19 +108,35 @@ If a commit spans multiple types, prefer the most significant one (usually `feat
 
 ## Workflow
 
-When asked to commit, or when you determine a commit is needed:
+Apply this whenever a commit will be produced — an explicit `git commit`, an amend, an interactive rebase reword, or an implied commit inside a larger request such as "open a PR", "push these changes", or "prepare a pull request". A PR is only as good as the commits behind it, so classify and word each commit the same way even when the user only asked about the PR.
 
 1. Run `git diff --cached` (or `git diff` if nothing is staged) to understand what changed.
 2. Run `git log --oneline -10` to see recent commit style and any existing scope conventions.
 3. Classify the change using the type selection guide above.
 4. Write the commit message following the format rules.
-5. Use `write_file` to save the message to a temporary file (e.g., `.git/COMMIT_MESSAGE`) and then use `git commit -F` to commit. This is the most robust way to handle multi-line messages and avoid safety blocks when the message content contains shell-sensitive characters like `$(` or backticks:
+5. Commit with the message read from a file — never inline with `-m`, and never via a shell heredoc or `>` redirect. Two steps:
 
-```bash
-# Step 1: write_file(file_path=".git/COMMIT_MESSAGE", content="...")
-# Step 2:
-git commit -F .git/COMMIT_MESSAGE && rm .git/COMMIT_MESSAGE
-```
+   **a. Write the message to `.git/COMMIT_EDITMSG` using your agent's native file-writing capability** — the one that writes content directly, without routing it through the shell. Use whichever your runtime provides:
+
+   | Agent | Tool |
+   |-------|------|
+   | Claude Code | `Write` |
+   | Gemini CLI / Antigravity | `write_file` |
+   | Codex | `apply_patch` (Add/Update File) |
+   | Other | any built-in file create/edit tool — **not** `echo`/`cat`/`>` |
+
+   **b. Commit from that file with plain git** (identical across every agent):
+
+   ```bash
+   git commit -F .git/COMMIT_EDITMSG
+   ```
+
+   Why a native file write instead of `git commit -m "…"` or a heredoc:
+   - **No escaping** — the message never touches the shell, so `$(`, backticks, `!`, quotes, and `#` in the body can't be interpreted or trigger safety blocks.
+   - **No redirects** — the file is created directly, avoiding `>`/`cat` quoting pitfalls.
+   - **No permission friction** — `.git/COMMIT_EDITMSG` is git's own commit-message scratch file: always writable, never shows up in `git status`, and git overwrites it on the next commit, so there is nothing to clean up.
+
+   `.git/COMMIT_EDITMSG` is deliberately a **relative** path — Codex's `apply_patch` rejects absolute paths, and it resolves correctly from the repo root for the others. For an amend: `git commit --amend -F .git/COMMIT_EDITMSG`. For a rebase reword, write the message to the path the rebase editor opens.
 
 ## Examples
 

@@ -8,7 +8,7 @@
       "includes_description_in_imperative_mood",
       "no_ai_co_author_trailer",
       "checks_staged_changes_first",
-      "uses_heredoc_for_commit"
+      "writes_message_to_file_and_commits_with_dash_F"
     ],
     "files": []
   },
@@ -67,6 +67,18 @@
       "uses_build_type",
       "no_ai_co_author_trailer",
       "checks_git_log_for_scope_conventions"
+    ],
+    "files": []
+  },
+  {
+    "id": 7,
+    "prompt": "Open a pull request for my staged changes that add rate limiting to the login endpoint.",
+    "expected_output": "Even though the user asked for a PR rather than a commit, the agent should invoke this skill and produce a Conventional Commits message for the underlying commit, e.g. `feat(auth): add rate limiting to login endpoint`. It should classify with the correct type, commit by writing the message to a file and using `git commit -F` (not `-m` or a heredoc), and include no AI attribution trailer.",
+    "assertions": [
+      "activates_on_pr_creation_request",
+      "uses_feat_type",
+      "writes_message_to_file_and_commits_with_dash_F",
+      "no_ai_co_author_trailer"
     ],
     "files": []
   }
