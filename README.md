@@ -40,6 +40,14 @@ Drive Atlassian Cloud products from the command line.
 |-------|---------|-------------|
 | [acli](./skills/atlassian/acli/SKILL.md) | `npx skills add hussainweb/skills@acli` | Drive Atlassian Cloud (Jira and Confluence) via the `acli` CLI — work items, projects, boards, sprints, pages, spaces, and blogs, with API-token authentication |
 
+### Git
+
+Conventions for working with git history.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [conventional-commits](./skills/git/conventional-commits/SKILL.md) | `npx skills add hussainweb/skills@conventional-commits` | Write commit messages following the Conventional Commits v1.0.0 specification — type, scope, description, and breaking-change conventions, with no agent attribution |
+
 ### GitHub
 
 Repository automation driven through the `gh` CLI.
@@ -58,6 +66,10 @@ skills/
 │   └── acli/
 │       ├── SKILL.md
 │       ├── references/
+│       └── evals/
+├── git/
+│   └── conventional-commits/
+│       ├── SKILL.md
 │       └── evals/
 ├── github/
 │   └── merge-dependabot-prs/
