@@ -40,6 +40,14 @@ Drive Atlassian Cloud products from the command line.
 |-------|---------|-------------|
 | [acli](./skills/atlassian/acli/SKILL.md) | `npx skills add hussainweb/skills@acli` | Drive Atlassian Cloud (Jira and Confluence) via the `acli` CLI — work items, projects, boards, sprints, pages, spaces, and blogs, with API-token authentication |
 
+### GitHub
+
+Repository automation driven through the `gh` CLI.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating |
+
 ## Repository Structure
 
 Skills are organized by technology or domain under the `skills/` directory:
@@ -50,6 +58,11 @@ skills/
 │   └── acli/
 │       ├── SKILL.md
 │       ├── references/
+│       └── evals/
+├── github/
+│   └── merge-dependabot-prs/
+│       ├── SKILL.md
+│       ├── scripts/
 │       └── evals/
 ├── ddev/
 │   └── ddev/

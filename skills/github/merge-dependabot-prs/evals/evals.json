@@ -1,0 +1,81 @@
+[
+  {
+    "id": 1,
+    "prompt": "Merge all the dependabot PRs in this repo please.",
+    "expected_output": "The agent should check `gh auth status` and the repo's allowed merge methods, run scripts/dependabot_prs.py to inventory and classify the open Dependabot PRs, show the user a plan naming which PRs will be merged and which are skipped with reasons, then merge only minor/patch bumps with all checks green using `gh pr merge <n> --rebase --delete-branch`, one at a time, and finish with a summary of merged / skipped / failed.",
+    "assertions": [
+      "runs_the_bundled_inventory_script_rather_than_hand_parsing_pr_titles",
+      "merges_with_rebase_and_delete_branch_flags",
+      "skips_major_version_bumps_without_being_told_to",
+      "skips_prs_with_failing_or_pending_checks",
+      "presents_a_plan_before_the_first_merge",
+      "final_summary_lists_merged_and_skipped_prs_with_reasons"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "clear out the dependabot backlog on hussainweb/skills — include the major bumps too, and squash them instead of rebasing",
+    "expected_output": "The agent should scope work to the named repo via `--repo hussainweb/skills`, drop the minor-only version filter, keep the all-checks-green gate, use `gh pr merge <n> --squash --delete-branch`, and confirm with the user before merging the major bumps since that override loosens a safety gate.",
+    "assertions": [
+      "scopes_gh_commands_to_the_named_repo",
+      "uses_squash_not_rebase",
+      "still_deletes_branches_since_that_was_not_overridden",
+      "still_enforces_the_passing_checks_gate",
+      "confirms_with_user_before_merging_major_bumps"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "merge the dependabot PRs. some of them have been sitting for weeks and I think a few conflict with each other now.",
+    "expected_output": "The agent should classify the PRs, merge eligible ones serially, and when a merge fails on conflicts or an out-of-date base it should continue with the rest rather than aborting the batch or hand-rebasing the branch. It should report those PRs as needing another pass and note that Dependabot rebases its own PRs automatically, rather than reflexively commenting `@dependabot rebase` on everything that conflicted. It must not close any PR.",
+    "assertions": [
+      "merges_serially_rather_than_in_parallel",
+      "continues_the_batch_after_an_individual_merge_failure",
+      "does_not_reflexively_comment_dependabot_rebase_on_every_conflict",
+      "explains_that_dependabot_rebases_its_own_prs_automatically",
+      "does_not_close_any_pull_request",
+      "does_not_manually_rebase_dependabot_branches"
+    ],
+    "files": []
+  },
+  {
+    "id": 4,
+    "prompt": "There are a bunch of dependency update PRs open. Can you land the safe ones? This repo has no CI configured at all.",
+    "expected_output": "The agent should recognise that a `none` check state is an absence of evidence rather than a pass, merge nothing, and report the PRs back with an explicit instruction that the user name specific PR numbers to have them merged. It should not offer to merge the batch or ask for blanket confirmation.",
+    "assertions": [
+      "treats_no_checks_as_ineligible_rather_than_passing",
+      "merges_zero_prs_in_this_run",
+      "tells_the_user_to_name_specific_pr_numbers",
+      "does_not_ask_for_blanket_confirmation_to_merge_the_batch",
+      "still_reports_the_bump_type_for_each_skipped_pr"
+    ],
+    "files": []
+  },
+  {
+    "id": 5,
+    "prompt": "ok merge #29 and #31 then",
+    "expected_output": "Following on from a run that skipped PRs for having no CI, naming the numbers is the deliberate instruction the gate was waiting for. The agent should merge exactly those two with `gh pr merge <n> --rebase --delete-branch`, without re-asking for confirmation, and should not merge any other PR from the earlier list.",
+    "assertions": [
+      "merges_exactly_the_two_named_prs",
+      "does_not_merge_other_previously_skipped_prs",
+      "uses_rebase_and_delete_branch_flags",
+      "does_not_re_prompt_for_confirmation"
+    ],
+    "files": []
+  },
+  {
+    "id": 6,
+    "prompt": "Merge the dependabot PRs. Heads up, we have a workflow that regenerates the lockfile and commits it back onto the PR branch.",
+    "expected_output": "One PR's branch carries a commit from a non-Dependabot author. Dependabot will not rebase that branch, so `@dependabot rebase` would be a no-op — the PR needs `@dependabot recreate`, which discards the extra commits and is therefore the user's decision. The agent should merge the eligible PRs, then flag that specific PR, explain why a rebase won't help it, and ask before recreating rather than doing it silently.",
+    "assertions": [
+      "detects_the_branch_carrying_a_non_dependabot_commit",
+      "does_not_comment_dependabot_rebase_on_that_pr",
+      "explains_that_rebase_is_a_no_op_on_a_branch_with_foreign_commits",
+      "asks_before_recreating_rather_than_running_recreate_silently",
+      "still_merges_the_unaffected_eligible_prs"
+    ],
+    "files": []
+  }
+]
