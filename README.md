@@ -23,6 +23,7 @@ Modern Drupal development skills following Drupal 11+ and PHP 8.5 standards.
 | [drupal-new-module](./skills/drupal/drupal-new-module/SKILL.md) | `npx skills add hussainweb/skills@drupal-new-module` | Scaffold new Drupal 11 modules with PSR-4 namespaces, OOP hooks, and modern PHP patterns |
 | [drupal-review](./skills/drupal/drupal-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-review` | Review Drupal code against team standards, security best practices, and caching requirements |
 | [drupal-theme-review](./skills/drupal/drupal-theme-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-theme-review` | Review Drupal theme code — Twig templates, libraries, JS behaviors, SDC, accessibility, and responsive images |
+| [drupal-upgrade](./skills/drupal/drupal-upgrade/SKILL.md) | `npx skills add hussainweb/skills@drupal-upgrade` | Guide a Drupal major version upgrade end to end — readiness assessment, deprecation scanning, compatibility fixes, and upgrade planning |
 
 ### DDEV
 
@@ -56,49 +57,20 @@ Repository automation driven through the `gh` CLI.
 |-------|---------|-------------|
 | [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating |
 
-## Repository Structure
+### Writing and notes
 
-Skills are organized by technology or domain under the `skills/` directory:
+Personal writing voice and note-taking conventions.
 
-```text
-skills/
-├── atlassian/
-│   └── acli/
-│       ├── SKILL.md
-│       ├── references/
-│       └── evals/
-├── git/
-│   └── conventional-commits/
-│       ├── SKILL.md
-│       └── evals/
-├── github/
-│   └── merge-dependabot-prs/
-│       ├── SKILL.md
-│       ├── scripts/
-│       └── evals/
-├── ddev/
-│   └── ddev/
-│       ├── SKILL.md
-│       ├── references/
-│       └── evals/
-└── drupal/
-    ├── drupal-new-module/
-    │   ├── SKILL.md
-    │   ├── references/
-    │   └── evals/
-    ├── drupal-review/
-    │   ├── SKILL.md
-    │   ├── references/
-    │   └── evals/
-    └── drupal-theme-review/
-        ├── SKILL.md
-        ├── references/
-        └── evals/
-```
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [hussainweb-writing-style](./skills/writing/hussainweb-writing-style/SKILL.md) | `npx skills add hussainweb/skills@hussainweb-writing-style` | Draft and edit blog posts, guides, TILs, and reflections in a conversational, empathetic, structured voice |
+| [logseq-organization](./skills/writing/logseq-organization/SKILL.md) | `npx skills add hussainweb/skills@logseq-organization` | Format and file Logseq notes to a specific vault's conventions — journals, tags, namespaces, and directory structure |
+| [capture-learning](./skills/writing/capture-learning/SKILL.md) | `npx skills add hussainweb/skills@capture-learning` | Capture technical realizations to Logseq as they surface in conversation — non-obvious behaviors, corrected assumptions, and debugged root causes |
 
 ## Skill Anatomy
 
-Each skill lives in its own directory and contains:
+Skills are organized by technology or domain: each lives at
+`skills/<category>/<skill-name>/`, and a skill directory contains:
 
 - **`SKILL.md`** — The instruction set and metadata (name, description, allowed tools, argument hints).
 - **`references/`** — Supporting reference documentation the skill can consult.
