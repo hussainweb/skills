@@ -6,6 +6,12 @@ fiddly parts — pulling the right JSON out of `gh`, reading Dependabot's commit
 metadata, comparing versions, and collapsing a check rollup into one word — happen the
 same way every time instead of being re-derived per PR.
 
+Commit metadata is fetched per PR rather than in the list query. `gh pr list --json commits`
+expands to a GraphQL query asking for authors(first: 100) on commits(first: 100) of every
+PR, which GitHub rejects outright above ~48 PRs ("requesting up to 1,000,000 possible nodes
+which exceeds the maximum limit of 500,000") no matter how many PRs actually exist. One
+`gh pr view` per Dependabot PR stays far under that ceiling.
+
 Usage:
     python3 dependabot_prs.py [--repo OWNER/REPO] [--limit N] [--author LOGIN] [--json]
 
@@ -24,23 +30,31 @@ import re
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 # Worst-first. "unknown" outranks "major" because an unverifiable bump is the one case
 # where we genuinely cannot promise the change is safe, so it must never slip through a
 # "minor only" filter.
 SEVERITY = ["unknown", "major", "minor", "patch", "none"]
 
+# `commits` is deliberately absent: gh expands it to authors(first: 100) on
+# commits(first: 100) per PR, which trips GitHub's 500,000-node query ceiling for any
+# --limit above ~48. It is fetched one PR at a time instead, in fetch_commits().
 BASE_FIELDS = [
     "number",
     "title",
+    "body",
     "url",
     "headRefName",
     "isDraft",
     "mergeable",
-    "commits",
     "statusCheckRollup",
     "labels",
 ]
+
+# How many `gh pr view` calls to keep in flight. Small enough to stay polite to the API,
+# large enough that a few dozen PRs resolve in seconds rather than a minute.
+COMMIT_WORKERS = 6
 
 # mergeStateStatus needs the `repo` scope; tokens without it make the whole query fail,
 # so it is requested separately and dropped if GitHub refuses.
@@ -88,9 +102,40 @@ def fetch_prs(repo: str | None, author: str, limit: int) -> tuple[list[dict], bo
     if proc.returncode != 0:
         die((proc.stderr or "gh pr list failed").strip())
     try:
-        return json.loads(proc.stdout or "[]"), had_merge_state
+        prs = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError:
         die("could not parse gh output as JSON")
+
+    attach_commits(prs, repo)
+    return prs, had_merge_state
+
+
+def fetch_commits(number: int, repo: str | None) -> list[dict] | None:
+    """Commits for one PR, or None if gh could not supply them.
+
+    None and [] mean different things downstream: None is "we never got the commit
+    metadata", which makes the PR fall back to its body, while [] is a genuine answer.
+    """
+    args = ["pr", "view", str(number), "--json", "commits"]
+    if repo:
+        args += ["--repo", repo]
+    proc = run_gh(args)
+    if proc.returncode != 0:
+        return None
+    try:
+        return json.loads(proc.stdout or "{}").get("commits") or []
+    except json.JSONDecodeError:
+        return None
+
+
+def attach_commits(prs: list[dict], repo: str | None) -> None:
+    """Populate pr["commits"] in place, one `gh pr view` per PR, run concurrently."""
+    if not prs:
+        return
+    with ThreadPoolExecutor(max_workers=min(COMMIT_WORKERS, len(prs))) as pool:
+        results = pool.map(lambda pr: fetch_commits(pr.get("number"), repo), prs)
+    for pr, commits in zip(prs, results):
+        pr["commits"] = commits
 
 
 def clean_name(raw: str) -> str:
@@ -169,22 +214,48 @@ def parse_prose(text: str) -> dict[str, tuple[str, str]]:
     return found
 
 
+def strip_details(body: str) -> str:
+    """Drop Dependabot's collapsed <details> blocks from a PR body.
+
+    Those blocks carry the dependency's own release notes and changelog, which are full of
+    other projects' "Bumps X from A to B" lines. Reading them as this PR's dependencies
+    invents updates that aren't in the diff, so only the summary text outside them is kept.
+    """
+    body = re.sub(r"<details>.*?</details>", "\n", body or "", flags=re.I | re.S)
+    return re.sub(r"<details>.*", "\n", body, flags=re.I | re.S)  # unclosed trailing block
+
+
 def classify_updates(pr: dict) -> tuple[str, list[dict], list[str]]:
     """Return (overall bump, per-dependency detail, notes)."""
-    bodies = "\n".join(
+    commits = pr.get("commits")
+    commit_text = "\n".join(
         f"{c.get('messageHeadline', '')}\n{c.get('messageBody', '')}"
-        for c in pr.get("commits") or []
+        for c in commits or []
     )
-    trailer = parse_trailer(bodies)
-    prose = parse_prose(bodies + "\n" + (pr.get("title") or ""))
+    body_text = strip_details(pr.get("body") or "")
+
+    notes: list[str] = []
+    if commits is None:
+        # Commit metadata never arrived, so the PR body is all there is. It carries the
+        # version prose but not the update-type trailer, which makes this strictly weaker.
+        notes.append("commit metadata unavailable; classified from the PR body alone")
+        source_text = body_text
+        backup_prose: dict[str, tuple[str, str]] = {}
+    else:
+        source_text = commit_text
+        # The body only fills in versions for dependencies the commits already named — it
+        # never introduces a new one, so a stray changelog line cannot invent a dependency.
+        backup_prose = parse_prose(body_text)
+
+    trailer = parse_trailer(source_text)
+    prose = parse_prose(source_text + "\n" + (pr.get("title") or ""))
 
     names = list(trailer) + [n for n in prose if n not in trailer]
     deps: list[dict] = []
-    notes: list[str] = []
 
     for name in names:
         explicit = trailer.get(name)
-        old, new = prose.get(name, ("", ""))
+        old, new = prose.get(name) or backup_prose.get(name) or ("", "")
         if explicit:
             kind, source = explicit, "trailer"
         elif old and new:
@@ -200,7 +271,7 @@ def classify_updates(pr: dict) -> tuple[str, list[dict], list[str]]:
             notes.append(f"{name}: version bump could not be determined")
 
     if not deps:
-        return "unknown", [], ["no dependency metadata found on this PR"]
+        return "unknown", [], notes + ["no dependency metadata found on this PR"]
     if len(deps) > 1:
         notes.insert(0, f"grouped update covering {len(deps)} dependencies")
     return worst([d["bump"] for d in deps]), deps, notes

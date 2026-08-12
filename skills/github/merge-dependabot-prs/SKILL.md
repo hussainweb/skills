@@ -214,3 +214,12 @@ attempts to surface protection failures that the plan could not predict.
 
 **Mergeability is computed lazily.** A fresh PR can report `UNKNOWN`; re-running the script
 resolves it.
+
+**Commit metadata costs one call per PR.** Asking `gh pr list` for `commits` alongside the
+other fields makes GitHub reject the query outright — gh requests 100 authors on each of 100
+commits per PR, which exceeds the 500,000-node query ceiling on any `--limit` above ~48,
+whether or not that many PRs exist. So the script lists PRs without `commits` and fetches
+them per PR instead. Expect a couple of seconds for a large backlog, and don't add `commits`
+back to the list query. If a PR's commits can't be fetched, that PR falls back to its body:
+the versions are still there, the `update-type` trailer is not, so it is likelier to land as
+`unknown` and be held back. The script says so in that PR's notes.
