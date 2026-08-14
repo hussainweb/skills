@@ -215,11 +215,20 @@ attempts to surface protection failures that the plan could not predict.
 **Mergeability is computed lazily.** A fresh PR can report `UNKNOWN`; re-running the script
 resolves it.
 
-**Commit metadata costs one call per PR.** Asking `gh pr list` for `commits` alongside the
-other fields makes GitHub reject the query outright — gh requests 100 authors on each of 100
-commits per PR, which exceeds the 500,000-node query ceiling on any `--limit` above ~48,
-whether or not that many PRs exist. So the script lists PRs without `commits` and fetches
-them per PR instead. Expect a couple of seconds for a large backlog, and don't add `commits`
-back to the list query. If a PR's commits can't be fetched, that PR falls back to its body:
-the versions are still there, the `update-type` trailer is not, so it is likelier to land as
-`unknown` and be held back. The script says so in that PR's notes.
+**Commit metadata comes from a hand-written GraphQL query.** Dependabot's commit trailer
+(`update-type: version-update:semver-minor`) is the only place the bump type is stated
+outright, so the script has to read the commits — but asking `gh pr list` for `commits`
+alongside the other fields makes GitHub reject the query outright. gh expands that field to
+100 authors on each of 100 commits per PR, which exceeds the 500,000-node ceiling on any
+`--limit` above ~48, whether or not that many PRs exist.
+
+So the script lists PRs without `commits` and then runs one `gh api graphql` call asking for
+the commit messages alone, with an aliased `pullRequest(number:)` per PR. Measured cost for
+a full 100-PR batch: 500 nodes (0.1% of the ceiling) and 1 rate-limit point. Don't add
+`commits` back to the list query, and if you extend the GraphQL query, keep nested
+connections out of it — that multiplication is what broke it the first time.
+
+If a PR's commits can't be fetched, that PR falls back to its body: the versions are still
+there, the `update-type` trailer is not, so it is likelier to land as `unknown` and be held
+back. The script says so in that PR's notes. One unreadable PR doesn't cost the batch — GitHub
+returns the rest alongside the error, and the script keeps whatever resolved.

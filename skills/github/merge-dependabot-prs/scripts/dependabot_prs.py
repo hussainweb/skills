@@ -6,11 +6,11 @@ fiddly parts — pulling the right JSON out of `gh`, reading Dependabot's commit
 metadata, comparing versions, and collapsing a check rollup into one word — happen the
 same way every time instead of being re-derived per PR.
 
-Commit metadata is fetched per PR rather than in the list query. `gh pr list --json commits`
-expands to a GraphQL query asking for authors(first: 100) on commits(first: 100) of every
-PR, which GitHub rejects outright above ~48 PRs ("requesting up to 1,000,000 possible nodes
-which exceeds the maximum limit of 500,000") no matter how many PRs actually exist. One
-`gh pr view` per Dependabot PR stays far under that ceiling.
+Commit metadata comes from a hand-written GraphQL query rather than from `gh pr list --json
+commits`. gh expands that field to authors(first: 100) on commits(first: 100) of every PR,
+which GitHub rejects outright above ~48 PRs ("requesting up to 1,000,000 possible nodes
+which exceeds the maximum limit of 500,000") no matter how many PRs actually exist. Asking
+for the commit messages alone, and nothing else, costs three orders of magnitude less.
 
 Usage:
     python3 dependabot_prs.py [--repo OWNER/REPO] [--limit N] [--author LOGIN] [--json]
@@ -30,7 +30,7 @@ import re
 import shutil
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 # Worst-first. "unknown" outranks "major" because an unverifiable bump is the one case
 # where we genuinely cannot promise the change is safe, so it must never slip through a
@@ -39,7 +39,7 @@ SEVERITY = ["unknown", "major", "minor", "patch", "none"]
 
 # `commits` is deliberately absent: gh expands it to authors(first: 100) on
 # commits(first: 100) per PR, which trips GitHub's 500,000-node query ceiling for any
-# --limit above ~48. It is fetched one PR at a time instead, in fetch_commits().
+# --limit above ~48. It is fetched by fetch_commits() instead.
 BASE_FIELDS = [
     "number",
     "title",
@@ -52,9 +52,14 @@ BASE_FIELDS = [
     "labels",
 ]
 
-# How many `gh pr view` calls to keep in flight. Small enough to stay polite to the API,
-# large enough that a few dozen PRs resolve in seconds rather than a minute.
-COMMIT_WORKERS = 6
+# How many commits to read per PR. Dependabot writes exactly one, and it is the oldest on
+# the branch even if a maintainer pushed follow-ups, so a handful is generous. Each one
+# costs a node: at 100 PRs this whole query is ~500 nodes against a ceiling of 500,000.
+COMMIT_DEPTH = 5
+
+# PRs per GraphQL call. The node budget would allow far more, but this keeps the query text
+# and the blast radius of a single failed call bounded; the default --limit fits in one.
+COMMIT_BATCH = 100
 
 # mergeStateStatus needs the `repo` scope; tokens without it make the whole query fail,
 # so it is requested separately and dropped if GitHub refuses.
@@ -110,32 +115,92 @@ def fetch_prs(repo: str | None, author: str, limit: int) -> tuple[list[dict], bo
     return prs, had_merge_state
 
 
-def fetch_commits(number: int, repo: str | None) -> list[dict] | None:
-    """Commits for one PR, or None if gh could not supply them.
+def repo_coords(prs: list[dict], repo: str | None) -> tuple[str | None, str, str] | None:
+    """(host, owner, name) for the GraphQL call, or None if it could not be determined.
+
+    Read off a PR's own URL in preference to --repo: the URLs are already in hand, and they
+    carry the host, so this keeps working on GitHub Enterprise without a second `gh` call.
+    A host of None means "whatever gh is configured to talk to".
+    """
+    for pr in prs:
+        parsed = urlparse(pr.get("url") or "")
+        parts = [p for p in parsed.path.split("/") if p]
+        if parsed.netloc and len(parts) >= 2:
+            return parsed.netloc, parts[0], parts[1]
+    # gh spells --repo as [HOST/]OWNER/REPO, so a third leading segment is the host.
+    parts = [p for p in (repo or "").split("/") if p]
+    if len(parts) >= 2:
+        return (parts[-3] if len(parts) >= 3 else None), parts[-2], parts[-1]
+    return None
+
+
+def commits_query(numbers: list[int]) -> str:
+    """A query asking only for commit messages, one aliased lookup per PR.
+
+    `pullRequest(number:)` is a plain field rather than a connection, so GraphQL offers no
+    way to hand it a list of numbers — aliases are how one call covers many PRs. Asking by
+    number also guarantees we ask about exactly the PRs `gh pr list` returned, with no
+    chance of the two queries disagreeing about which PRs are open.
+    """
+    aliases = "\n".join(f"    pr{n}: pullRequest(number: {n}) {{ ...msgs }}" for n in numbers)
+    return (
+        "query($owner: String!, $name: String!) {\n"
+        "  repository(owner: $owner, name: $name) {\n"
+        f"{aliases}\n"
+        "  }\n"
+        "}\n"
+        "fragment msgs on PullRequest {\n"
+        f"  commits(first: {COMMIT_DEPTH}) "
+        "{ nodes { commit { messageHeadline messageBody } } }\n"
+        "}\n"
+    )
+
+
+def fetch_commits(
+    coords: tuple[str | None, str, str], numbers: list[int]
+) -> dict[int, list[dict] | None]:
+    """Commit messages for each PR number, or None for any PR that could not be read.
 
     None and [] mean different things downstream: None is "we never got the commit
     metadata", which makes the PR fall back to its body, while [] is a genuine answer.
     """
-    args = ["pr", "view", str(number), "--json", "commits"]
-    if repo:
-        args += ["--repo", repo]
+    host, owner, name = coords
+    args = ["api", "graphql",
+            "-f", f"query={commits_query(numbers)}",
+            "-f", f"owner={owner}", "-f", f"name={name}"]
+    if host:
+        args += ["--hostname", host]
     proc = run_gh(args)
-    if proc.returncode != 0:
-        return None
+    # A GraphQL error makes gh exit non-zero even when `data` came back populated — one
+    # unreadable PR should not cost us the rest of the batch — so the body is parsed either
+    # way and only the aliases that actually resolved are used.
     try:
-        return json.loads(proc.stdout or "{}").get("commits") or []
+        payload = json.loads(proc.stdout or "{}")
     except json.JSONDecodeError:
-        return None
+        payload = {}
+    repo_node = (payload.get("data") or {}).get("repository") or {}
+
+    found: dict[int, list[dict] | None] = {}
+    for number in numbers:
+        node = repo_node.get(f"pr{number}")
+        if not node:
+            found[number] = None
+            continue
+        nodes = (node.get("commits") or {}).get("nodes") or []
+        found[number] = [c["commit"] for c in nodes if c and c.get("commit")]
+    return found
 
 
 def attach_commits(prs: list[dict], repo: str | None) -> None:
-    """Populate pr["commits"] in place, one `gh pr view` per PR, run concurrently."""
-    if not prs:
-        return
-    with ThreadPoolExecutor(max_workers=min(COMMIT_WORKERS, len(prs))) as pool:
-        results = pool.map(lambda pr: fetch_commits(pr.get("number"), repo), prs)
-    for pr, commits in zip(prs, results):
-        pr["commits"] = commits
+    """Populate pr["commits"] in place, one GraphQL call per COMMIT_BATCH PRs."""
+    coords = repo_coords(prs, repo)
+    numbers = [pr["number"] for pr in prs if isinstance(pr.get("number"), int)]
+    found: dict[int, list[dict] | None] = {}
+    if coords and numbers:
+        for start in range(0, len(numbers), COMMIT_BATCH):
+            found.update(fetch_commits(coords, numbers[start:start + COMMIT_BATCH]))
+    for pr in prs:
+        pr["commits"] = found.get(pr.get("number"))
 
 
 def clean_name(raw: str) -> str:
