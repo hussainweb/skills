@@ -33,6 +33,14 @@ Local development environment management with DDEV.
 |-------|---------|-------------|
 | [ddev](./skills/ddev/ddev/SKILL.md) | `npx skills add hussainweb/skills@ddev` | Guide command execution in DDEV-based projects — route commands through containers, manage add-ons, and configure services |
 
+### Coolify
+
+Deployment and operations on self-hosted Coolify.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [coolify](./skills/coolify/coolify/SKILL.md) | `npx skills add hussainweb/skills@coolify` | Deploy and operate applications on Coolify v4.1+ — Docker Compose resources, environment-variable conventions, shared databases and Redis, PHP/Drupal deployments, GitHub Actions pipelines, and routing diagnostics |
+
 ### Atlassian
 
 Drive Atlassian Cloud products from the command line.

@@ -1,0 +1,79 @@
+[
+  {
+    "id": 1,
+    "prompt": "Set up a docker-compose.yml so I can deploy this Laravel app to Coolify. It needs Redis for cache and queues, and it talks to a MySQL server we already run elsewhere.",
+    "expected_output": "The agent should produce a compose file with a `web` service, a `worker` service running `php artisan queue:work` (with `healthcheck: {disable: true}`), and an in-stack `redis`. Every operator-tunable value must be written as `${VAR:-default}` — DB_HOST, DB_PORT, DB_DATABASE, REDIS_HOST etc. — with `APP_KEY=${APP_KEY}` having no default. It must NOT define a `networks:` block and must NOT publish any `ports:`. It should note that the config cache must be rebuilt post-deploy or env changes will not take effect.",
+    "assertions": [
+      "no_custom_networks_block",
+      "no_published_ports",
+      "env_values_use_interpolation_with_defaults",
+      "app_key_has_no_default",
+      "worker_healthcheck_disabled",
+      "mentions_config_cache_rebuild_post_deploy"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "Our GitHub Actions pipeline builds the image and pushes it to GHCR, then curls the Coolify webhook. The build is green but the site never updates. What's wrong?",
+    "expected_output": "The agent should check two things before theorising: whether the deploy curl issues a POST (Coolify >= 4.2.0 rejects GET on /deploy with 405), and whether the compose file sets `pull_policy: always` (without it the stale local `latest` is reused). It should also establish the running Coolify version rather than assuming. It should not immediately propose rewriting the Dockerfile or the workflow wholesale.",
+    "assertions": [
+      "checks_http_method_is_post",
+      "mentions_405_breaking_change_in_4_2_0",
+      "checks_pull_policy_always",
+      "establishes_coolify_version",
+      "does_not_guess_before_checking"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "My Coolify app returns 503 no available server. The container reports healthy and the proxy is on the right network. Ideas?",
+    "expected_output": "The agent should run the Traefik label count on the container (`docker inspect ... | grep -c traefik`) as the first move, and identify that zero labels means the resource has no domain set, so no router exists. It should also suggest comparing side by side against a working resource on the same host. It should NOT propose that empty `custom_labels` in the database, or the absence of a `loadbalancer.server.port` label, is the cause — a working app has neither.",
+    "assertions": [
+      "counts_traefik_labels_first",
+      "identifies_missing_domain_as_likely_cause",
+      "suggests_side_by_side_comparison_with_working_resource",
+      "does_not_blame_empty_custom_labels",
+      "does_not_blame_missing_loadbalancer_server_port"
+    ],
+    "files": []
+  },
+  {
+    "id": 4,
+    "prompt": "How do I connect three apps on my Coolify server to one shared MySQL database resource? They're each their own compose stack.",
+    "expected_output": "The agent should point to the 'Connect To Predefined Network' setting on each application (Configuration > Advanced), selecting the `coolify` network, and explicitly warn against adding a `networks:` block to the compose file because dual-network membership causes intermittent HTTPS outages. It should recommend one database and one user per application rather than a shared schema, and shared `{{project.*}}` variables for common connection values.",
+    "assertions": [
+      "recommends_connect_to_predefined_network",
+      "warns_against_custom_networks_block",
+      "recommends_separate_db_and_user_per_app",
+      "mentions_shared_project_or_team_variables"
+    ],
+    "files": []
+  },
+  {
+    "id": 5,
+    "prompt": "Write the health check for our Drupal container on Coolify. First deploy, the database is still empty.",
+    "expected_output": "The agent should write a health check script inside the image (not a CMD-SHELL one-liner), send an explicit `Host` header rather than relying on 127.0.0.1, and accept 302 (redirect to the installer on an empty database), 401 (basic auth) and 403 (blocked installer) as healthy, along with 200. It should set a `start_period`. It should explain that rejecting 302 means the first deploy can never pass.",
+    "assertions": [
+      "accepts_302_401_403_as_healthy",
+      "sends_explicit_host_header",
+      "puts_logic_in_a_script_not_inline_yaml",
+      "sets_start_period",
+      "explains_empty_database_redirect"
+    ],
+    "files": []
+  },
+  {
+    "id": 6,
+    "prompt": "What version of Coolify should I write this deployment guide against, and does it matter?",
+    "expected_output": "The agent should say it matters a great deal, explain that Coolify 4 was in beta for roughly two years and only reached stable 4.0.0 in April 2026 so most recalled and published knowledge is beta-era, and instruct the user to establish the running version via the `coolify.version` container label, the API, or the sidebar before applying anything. It should not confidently assert behaviour without naming the version it applies to.",
+    "assertions": [
+      "states_that_version_matters",
+      "gives_a_command_to_establish_the_running_version",
+      "warns_that_recalled_knowledge_is_beta_era",
+      "pins_claims_to_a_version"
+    ],
+    "files": []
+  }
+]
