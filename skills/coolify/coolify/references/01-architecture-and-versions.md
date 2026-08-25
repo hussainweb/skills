@@ -130,6 +130,8 @@ Verified as of August 2026:
 
 When auto-detection fits the app at all — a single container, no workers, no sidecars, defaults acceptable — prefer **Railpack for new applications** and treat an existing Nixpacks app as migration-eligible rather than something to build on (config moves from `nixpacks.toml`/`NIXPACKS_*` to `railpack.json`/`RAILPACK_*`). The moment the app needs a second container, a queue worker, precise image control, or a CI-built image, graduate to Docker Compose and the rest of this skill applies.
 
+For Railpack configuration itself — `railpack.json`, `RAILPACK_*` variables, plan inspection and debugging — do not recreate guidance here: use the official Railpack skill maintained in the `railwayapp/railpack` repo (`npx skills add railwayapp/railpack`), or its live docs index at <https://railpack.com/llms.txt>. This skill only covers the Coolify side of the seam (build-pack selection, variables entered as build-time variables in the Coolify UI, version availability).
+
 ## 5. Introspecting Coolify's own state
 
 Coolify's Postgres is ground truth for what Coolify *thinks*, as opposed to what it renders. On the control plane:
