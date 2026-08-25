@@ -115,11 +115,20 @@ A resource is deployed to a *destination* on a *server*. Environment variables c
 
 | Type | What it is |
 | --- | --- |
-| **Application** | Deployed from git or a registry image. Build packs: Nixpacks, Static, Dockerfile, **Docker Compose**, Docker Image |
+| **Application** | Deployed from git or a registry image. Build packs: Nixpacks, Railpack, Static, Dockerfile, **Docker Compose**, Docker Image |
 | **Database** | A Coolify-managed standalone Postgres / MySQL / MariaDB / MongoDB / Redis / KeyDB / Dragonfly / ClickHouse, with backups |
 | **Service** | A one-click stack from Coolify's template catalogue |
 
 For the applications this skill is about, the build pack is almost always **Docker Compose**. See `02-docker-compose.md`.
+
+#### The auto-detect build packs: Nixpacks and Railpack
+
+Verified as of August 2026:
+
+- **Nixpacks is in maintenance mode.** Railway, its maker, states in the project README: "This project is currently in maintenance mode and is not under active development. We recommend using Railpack as a replacement." It still works and remains listed in Coolify's UI and docs without a deprecation banner, but it is not gaining new language/version support.
+- **Railpack** is Railway's successor (BuildKit-based, `railpack.json`, Mise instead of Nix). Coolify added it as a build pack in **v4.1.0 (18 May 2026)** and its docs still label it **Beta**; Railpack-related fixes continued landing through 4.2.0, so on older instances check the version (Rule 0) before assuming it exists.
+
+When auto-detection fits the app at all — a single container, no workers, no sidecars, defaults acceptable — prefer **Railpack for new applications** and treat an existing Nixpacks app as migration-eligible rather than something to build on (config moves from `nixpacks.toml`/`NIXPACKS_*` to `railpack.json`/`RAILPACK_*`). The moment the app needs a second container, a queue worker, precise image control, or a CI-built image, graduate to Docker Compose and the rest of this skill applies.
 
 ## 5. Introspecting Coolify's own state
 

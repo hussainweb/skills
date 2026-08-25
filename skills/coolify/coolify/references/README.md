@@ -6,7 +6,7 @@ Reference files for the Coolify deployment and operations skill.
 
 | File | Topic |
 |---|---|
-| `01-architecture-and-versions.md` | What Coolify is, control plane vs application servers, resource hierarchy, establishing the running version, recent breaking changes, introspecting Coolify's own database |
+| `01-architecture-and-versions.md` | What Coolify is, control plane vs application servers, resource hierarchy, build packs (incl. Nixpacks maintenance mode → Railpack), establishing the running version, recent breaking changes, introspecting Coolify's own database |
 | `02-docker-compose.md` | The Docker Compose build pack — what Coolify rewrites, hard rules (no custom networks, no published ports), domains and routing, magic `SERVICE_*` variables, volumes, health checks, the three compose shapes |
 | `03-environment-variables.md` | The `${VAR:-default}` convention that makes settings editable in the UI, variable-store drift, build vs runtime variables, shared `{{project.*}}` variables, literal and multiline values, predefined `COOLIFY_*` variables |
 | `04-shared-infrastructure.md` | Shared databases, Redis and search — in-stack vs Coolify-managed vs external, "Connect to Predefined Network", tenant isolation, reaching host services |
