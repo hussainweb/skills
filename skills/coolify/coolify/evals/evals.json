@@ -75,5 +75,19 @@
       "pins_claims_to_a_version"
     ],
     "files": []
+  },
+  {
+    "id": 7,
+    "prompt": "Add a deploy job to our GitHub Actions workflow that hits the Coolify webhook after the image is pushed.",
+    "expected_output": "The agent should not emit `environment: production` as boilerplate. It should establish which GitHub environment the deploy job targets: list the repo's existing environments (e.g. `gh api repos/<owner>/<repo>/environments`) and reuse a matching one, ask the user (or state the assumption) when none exists, and store COOLIFY_WEBHOOK_URL and COOLIFY_API_TOKEN as environment secrets on that environment. It should know that referencing a nonexistent environment silently auto-creates it with no protection rules and no secrets. If the repo deliberately uses no environments, it should drop the `environment:` line and name the trade-offs (no approval gate, credential readable by all workflows) rather than naming an environment that was never set up. The deploy curl must use POST.",
+    "assertions": [
+      "determines_or_asks_which_github_environment",
+      "does_not_hardcode_environment_production_blindly",
+      "stores_webhook_and_token_as_environment_secrets",
+      "warns_about_silent_auto_creation_of_missing_environment",
+      "handles_no_environment_case_explicitly_with_tradeoffs",
+      "deploy_curl_uses_post"
+    ],
+    "files": []
   }
 ]

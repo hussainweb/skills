@@ -87,7 +87,7 @@ This is 12-factor with one Coolify-specific convention attached. Full rules — 
 4. Write the `environment:` blocks following `references/03-environment-variables.md`, and keep `.env.example` in parity with them.
 5. Decide where the database, cache, and search live — in-stack, Coolify-managed and shared, or external: `references/04-shared-infrastructure.md`.
 6. Apply the stack-specific reference: `references/05-php-applications.md` for PHP/Laravel/FrankenPHP, and additionally `references/06-drupal.md` for Drupal.
-7. Add CI: `references/07-github-actions-deployment.md`.
+7. Add CI: `references/07-github-actions-deployment.md`. The deploy job should target a deliberately chosen GitHub environment (or deliberately none) — see §7 of that reference; never emit `environment: production` as boilerplate.
 8. Validate locally before pushing — `docker compose config` as its own step, not chained onto a commit.
 
 ### Debugging a deployed resource

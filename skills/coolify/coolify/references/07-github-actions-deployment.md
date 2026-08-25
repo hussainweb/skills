@@ -266,7 +266,7 @@ GHCR storage is not free and untagged versions accumulate on every push. This jo
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: production
+    environment: production   # not boilerplate — see "Which GitHub environment?" below
     steps:
       - name: Trigger Coolify deployment
         env:
@@ -292,11 +292,39 @@ A great many existing pipelines — including ones written against 4.1.x that wo
 
 The common pattern of "if the secret is missing, print a message and exit 0" turns a misconfigured deployment into a green build. Prefer failing. If a soft skip is genuinely wanted (say, forks cannot deploy), make it visible with `::warning::`.
 
+### Which GitHub environment? Decide, don't copy
+
+A qualified deploy job names a [GitHub environment](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments). The `environment:` line is what scopes `COOLIFY_WEBHOOK_URL` and `COOLIFY_API_TOKEN` as environment secrets — out of reach of workflows on other branches — and it is where protection rules (required reviewers, branch restrictions, wait timers) and the repo's deployment history attach. `production` in the example above is a placeholder for *that repo's* deploy target, not a value to copy.
+
+Before emitting this job for a real repository, establish the target:
+
+1. **See what already exists:**
+
+   ```sh
+   gh api repos/<owner>/<repo>/environments --jq '.environments[].name'
+   ```
+
+   If environments exist, use the one that matches the target being deployed — do not invent a second name for the same target. Where the Coolify side has named environments too (a Coolify project's *production* / *staging*), matching the names across both systems avoids permanent confusion.
+
+2. **If none exists, create it — with its secrets — before the first run**, or ask the user what to call it:
+
+   ```sh
+   gh api -X PUT repos/<owner>/<repo>/environments/production
+   gh secret set COOLIFY_WEBHOOK_URL --env production
+   gh secret set COOLIFY_API_TOKEN --env production
+   ```
+
+   Naming a nonexistent environment does **not** fail the workflow: GitHub auto-creates it on first run, with no protection rules and no secrets. The deploy job then runs ungated and dies on the empty `COOLIFY_WEBHOOK_URL` — or worse, "succeeds" if the step soft-skips (see "Fail loudly" above).
+
+3. **Multiple targets** (staging deployed from `develop`, production from `main`): one deploy job per target, each with its own `environment:`, its own webhook URL (a different Coolify resource UUID), and its own token, each stored as secrets on its own environment. A single job can also compute the name — `environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}` — but per-target jobs read better in the Actions UI and let the `if:` conditions stay simple.
+
+4. **Deliberately using no environment** is legitimate for a small personal repo. Then *drop* the `environment:` line and store the two secrets as repository secrets — accepting that there is no approval gate, no deployment history, and that any workflow in the repo can read the deploy credential. What is not legitimate is emitting `environment: production` decoratively in a repo where nobody set that environment up; that is exactly how the silent auto-create in point 2 happens.
+
 ### Webhook URL and token
 
 - The URL comes from the application's **Webhooks** tab in Coolify. It resolves to `POST /api/v1/deploy?uuid=<resource-uuid>`, and `force=true` can be appended for a no-cache rebuild.
 - The token is generated under **Keys & Tokens → API Tokens**, and needs the `deploy` permission.
-- Store both as **environment secrets** on a `production` environment rather than plain repository secrets. That is what `environment: production` in the job buys you: an approval gate and an audit trail, and it keeps the deploy credential out of reach of workflows on other branches.
+- Store both as **environment secrets** on the environment the deploy job names (see "Which GitHub environment?" above) rather than plain repository secrets.
 - Coolify's own git-source webhook (auto-deploy on push) is an alternative for model A. **Turn it off when using this workflow**, or every push deploys twice — once from Coolify's webhook against un-built code, once from CI.
 
 ### What the deploy actually does
@@ -330,8 +358,8 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | Secret | Scope | Needed for | Notes |
 | --- | --- | --- | --- |
 | `GITHUB_TOKEN` | automatic | Pushing to GHCR, pruning | No setup; requires `packages: write` on the job |
-| `COOLIFY_WEBHOOK_URL` | environment (`production`) | Triggering the deploy | From the application's Webhooks tab |
-| `COOLIFY_API_TOKEN` | environment (`production`) | Authorising the trigger | Needs the `deploy` permission |
+| `COOLIFY_WEBHOOK_URL` | environment (the deploy job's — §7) | Triggering the deploy | From the application's Webhooks tab; one per deploy target |
+| `COOLIFY_API_TOKEN` | environment (the deploy job's — §7) | Authorising the trigger | Needs the `deploy` permission |
 | `COMPOSER_AUTH` | repository | Private Composer packages | A bare PAT or a full JSON document; the Dockerfile handles both |
 | A PAT with `read:packages` | **on the server, not in CI** | Pulling the private image | Used once in `docker login ghcr.io` |
 
@@ -343,6 +371,7 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | CI green, deploy green, site unchanged | `pull_policy` in the compose file | Missing → stale local `latest` reused |
 | Deploy fails pulling the image | `docker pull ghcr.io/<org>/<repo>:latest` **on the server** | No `docker login`, or logged in as the wrong user |
 | Prune job succeeds, storage still growing | The `package-name` value | It is the package name, not `owner/repo` |
+| Deploy step sees empty `COOLIFY_WEBHOOK_URL` though "the secret is set" | Where the secret lives vs the job's `environment:` | Secret stored on an environment the job does not name (wrong name, or no `environment:` line at all), or the named environment was silently auto-created empty — see §7 |
 | Two deploys per push | Coolify's git-source auto-deploy | Both Coolify's webhook and CI are triggering |
 | Older push overwrites newer | `concurrency` block | Missing or missing `cancel-in-progress` |
 | Build works locally, fails in CI | `cache-from`/`cache-to` and the base-image digest | Local cache hides a broken layer |
