@@ -72,6 +72,7 @@ Personal writing voice and note-taking conventions.
 | Skill | Install | Description |
 |-------|---------|-------------|
 | [hussainweb-writing-style](./skills/writing/hussainweb-writing-style/SKILL.md) | `npx skills add hussainweb/skills@hussainweb-writing-style` | Draft and edit blog posts, guides, TILs, and reflections in a conversational, empathetic, structured voice |
+| [interviewer](./skills/writing/interviewer/SKILL.md) | `npx skills add hussainweb/skills@interviewer` | Conduct interactive Socratic interviews to draw out authentic insights, lived experiences, and nuances from the user before writing or planning |
 | [logseq-organization](./skills/writing/logseq-organization/SKILL.md) | `npx skills add hussainweb/skills@logseq-organization` | Format and file Logseq notes to a specific vault's conventions — journals, tags, namespaces, and directory structure |
 | [capture-learning](./skills/writing/capture-learning/SKILL.md) | `npx skills add hussainweb/skills@capture-learning` | Capture technical realizations to Logseq as they surface in conversation — non-obvious behaviors, corrected assumptions, and debugged root causes |
 
