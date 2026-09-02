@@ -209,6 +209,7 @@ The `APP_KEY` here is a throwaway for the test run only. Never reuse a productio
           cache-to: type=gha,mode=max
           secrets: |
             COMPOSER_AUTH=${{ secrets.COMPOSER_AUTH || secrets.GITHUB_TOKEN }}
+          provenance: false
 ```
 
 Notes:
@@ -218,10 +219,17 @@ Notes:
 - `cache-from`/`cache-to: type=gha` reuses layers across runs. `mode=max` caches intermediate stages too, which is the difference that matters for a multi-stage build.
 - `secrets:` passes a BuildKit secret matching the `--mount=type=secret,id=COMPOSER_AUTH` in the Dockerfile. This is how private dependencies get in without landing in image metadata. `secrets.COMPOSER_AUTH || secrets.GITHUB_TOKEN` falls back to the automatic token, which suffices for private repositories in the same organisation.
 - Add `platforms: linux/amd64,linux/arm64` only if the servers genuinely differ. Multi-arch roughly doubles build time.
+- **`provenance: false` is not optional if you prune untagged versions (§6).** `docker/build-push-action` attaches a provenance attestation by default. On GHCR that attestation appears as an *untagged* package version which the tagged manifest index still references — so an untagged prune can delete it out from under a live tag and break `docker pull`. Single-arch deployment images gain nothing from attestations. Keep them only if you actually verify them, and then never prune untagged versions to zero.
 
 ## 6. Pruning old package versions
 
 GHCR storage is not free and untagged versions accumulate on every push. This job keeps it bounded.
+
+**Know the action's real input list before you write this job.** `actions/delete-package-versions@v5` accepts *only* these, per its `action.yml`:
+
+`package-version-ids`, `owner`, `package-name`, `package-type`, `num-old-versions-to-delete`, `min-versions-to-keep`, `ignore-versions`, `delete-only-pre-release-versions`, `delete-only-untagged-versions`, `token`
+
+There is **no tag-regex input.** GitHub Actions only *warns* about an unrecognised `with:` key and still runs the step, so an invented input like `delete-only-package-with-specified-tag-regex` fails silently and the step quietly degrades into a plain keep-N-newest delete across every version of the package. Verify any input you are unsure about against the action's `action.yml`.
 
 ```yaml
   prune-old-images:
@@ -237,26 +245,26 @@ GHCR storage is not free and untagged versions accumulate on every push. This jo
         with:
           package-name: <package-name>          # the repo name, lowercase, not owner/repo
           package-type: container
-          min-versions-to-keep: 3
+          min-versions-to-keep: 0
           delete-only-untagged-versions: 'true'
-          ignore-versions: '^latest$'
 
-      - name: Delete old sha- tagged versions
+      - name: Bound tagged version history
         uses: actions/delete-package-versions@v5
         with:
           package-name: <package-name>
           package-type: container
-          min-versions-to-keep: 5
-          delete-only-package-with-specified-tag-regex: '^sha-'
-          ignore-versions: '^latest$'
+          min-versions-to-keep: 10
 ```
 
-- Two steps, deliberately. The first clears untagged layers left behind when a tag moves. The second bounds the `sha-` history while keeping enough versions to roll back to.
-- **`package-name` is the package name, not `owner/repo`.** Getting this wrong makes the job succeed while deleting nothing — check the Packages tab for the exact string.
-- **`min-versions-to-keep` is your rollback depth.** Keep at least as many `sha-` versions as commits you might realistically need to go back. Three is tight; five is comfortable.
-- `ignore-versions: '^latest$'` is a guard against ever deleting the tag the deployment depends on.
+- Two steps, deliberately. The first clears untagged layers left behind when a tag moves. The second bounds total history while keeping enough versions to roll back to.
+- **`package-name` is the package name, not `owner/repo`.** Getting this wrong makes the job succeed while deleting nothing — check the Packages tab for the exact string. Note that for a compose stack pushing several images from one repo, the package name is usually `<repo>/<image>`.
+- **`min-versions-to-keep` on the second step is your rollback depth.** It counts *versions*, not tags: one push produces one version carrying `latest`, `main` and `sha-<short>` together, so a depth of 10 means the last ten builds. Three is tight; ten is comfortable. The just-pushed `latest` is always among the newest kept, which is what keeps the deployed tag safe.
+- **Do not try to protect `latest` with `ignore-versions`.** That input is matched against the package *version name*, which for container packages is the image digest (`sha256:…`), never a tag. `ignore-versions: '^latest$'` therefore matches nothing and protects nothing — a very easy thing to write and believe. Recency is what keeps `latest` alive.
+- **The second step cannot be limited to `sha-` tags**, because the action has no tag filter. It bounds *all* tagged versions. If your tag set includes `type=semver` release tags, old release images will eventually be pruned too. When preserving releases matters, either raise the depth substantially or use an action that genuinely filters by tag, such as [`snok/container-retention-policy`](https://github.com/snok/container-retention-policy).
+- **`min-versions-to-keep: 0` on the untagged step requires `provenance: false` on the build** (§5). Otherwise this step deletes the attestation manifest that the tagged index references.
 - Run it **after** the push, never before — deleting first would remove the version you are about to need.
 - It runs in the same workflow rather than on a schedule so that storage never drifts unattended. A separate scheduled workflow is a fine alternative if the job is noisy.
+- Listing package versions through the REST API (to check what the job actually did) needs a token with `read:packages`. The workflow's own `GITHUB_TOKEN` with `packages: write` is enough for the deletes themselves.
 
 ## 7. Triggering the deployment
 
