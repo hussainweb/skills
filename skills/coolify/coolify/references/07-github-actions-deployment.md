@@ -253,12 +253,12 @@ There is **no tag-regex input.** GitHub Actions only *warns* about an unrecognis
         with:
           package-name: <package-name>
           package-type: container
-          min-versions-to-keep: 10
+          min-versions-to-keep: 3
 ```
 
 - Two steps, deliberately. The first clears untagged layers left behind when a tag moves. The second bounds total history while keeping enough versions to roll back to.
 - **`package-name` is the package name, not `owner/repo`.** Getting this wrong makes the job succeed while deleting nothing — check the Packages tab for the exact string. Note that for a compose stack pushing several images from one repo, the package name is usually `<repo>/<image>`.
-- **`min-versions-to-keep` on the second step is your rollback depth.** It counts *versions*, not tags: one push produces one version carrying `latest`, `main` and `sha-<short>` together, so a depth of 10 means the last ten builds. Three is tight; ten is comfortable. The just-pushed `latest` is always among the newest kept, which is what keeps the deployed tag safe.
+- **`min-versions-to-keep` on the second step is your rollback depth, and three is a deliberately low starting point.** It counts *versions*, not tags: one push produces one version carrying `latest`, `main` and `sha-<short>` together, so three keeps the last three builds. Raise it only for a reason you can name — pushing several times a day, or needing to reach past same-day builds to roll back. Container storage is billed against the account, and a generous default costs you on every package in every repository, quietly and forever. The just-pushed `latest` is always among the newest kept, which is what keeps the deployed tag safe.
 - **Do not try to protect `latest` with `ignore-versions`.** That input is matched against the package *version name*, which for container packages is the image digest (`sha256:…`), never a tag. `ignore-versions: '^latest$'` therefore matches nothing and protects nothing — a very easy thing to write and believe. Recency is what keeps `latest` alive.
 - **The second step cannot be limited to `sha-` tags**, because the action has no tag filter. It bounds *all* tagged versions. If your tag set includes `type=semver` release tags, old release images will eventually be pruned too. When preserving releases matters, either raise the depth substantially or use an action that genuinely filters by tag, such as [`snok/container-retention-policy`](https://github.com/snok/container-retention-policy).
 - **`min-versions-to-keep: 0` on the untagged step requires `provenance: false` on the build** (§5). Otherwise this step deletes the attestation manifest that the tagged index references.
