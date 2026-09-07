@@ -63,7 +63,7 @@ Repository automation driven through the `gh` CLI.
 
 | Skill | Install | Description |
 |-------|---------|-------------|
-| [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating |
+| [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating; explains how safe each held-back major bump is for the project |
 
 ### Writing and notes
 

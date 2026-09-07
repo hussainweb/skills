@@ -14,10 +14,16 @@ for the commit messages alone, and nothing else, costs three orders of magnitude
 
 Usage:
     python3 dependabot_prs.py [--repo OWNER/REPO] [--limit N] [--author LOGIN] [--json]
+    python3 dependabot_prs.py [--repo OWNER/REPO] --notes N [N ...]
 
 Output (default): one table row per PR, plus a summary of what the default policy
 (minor/patch + all checks green) would merge. With --json: the same data as a JSON
 array on stdout, for scripting.
+
+With --notes: for each named PR, the evidence needed to judge a held-back bump — the
+version range, the upstream repo, which files the PR touches (manifest vs lockfile only),
+the release notes and changelog Dependabot pasted into the PR body rendered as plain text,
+and the lines in them that mention breaking changes, removals, or new runtime minimums.
 
 Exit codes: 0 = ran fine (even if zero PRs), 1 = gh call failed or gh is missing.
 """
@@ -25,6 +31,7 @@ Exit codes: 0 = ran fine (even if zero PRs), 1 = gh call failed or gh is missing
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import shutil
@@ -417,7 +424,164 @@ def evaluate(pr: dict, had_merge_state: bool) -> dict:
     }
 
 
-def print_table(rows: list[dict], had_merge_state: bool) -> None:
+# Words that, in a changelog, tend to sit next to the thing that will break a consumer.
+# This is a reading aid, not a classifier: a hit means "look here", a miss means nothing.
+BREAKING_MARKERS = re.compile(
+    r"breaking|\bremov(?:e|ed|es|al)\b|\bdrop(?:ped|s)?\b|no longer|deprecat|migrat"
+    r"|renamed?|replaced?|minimum|\brequires?\b|end[- ]of[- ]life|incompatib|unsupported"
+    r"|\bnode(?:\.js)?\s*\d|\bphp\s*[>=^]*\s*\d|\bpython\s*[>=^]*\s*\d",
+    re.IGNORECASE,
+)
+MAX_MARKER_LINES = 40
+
+# Blocks worth reading in full. "Commits" is a long list of headlines that rarely says
+# anything the notes don't, and "Maintainer changes" is about npm publish rights.
+NOTE_BLOCKS = {"release notes", "changelog"}
+
+
+def fetch_pr(repo: str | None, number: int) -> dict:
+    args = ["pr", "view", str(number), "--json",
+            "number,title,body,url,files,labels,statusCheckRollup"]
+    if repo:
+        args += ["--repo", repo]
+    proc = run_gh(args)
+    if proc.returncode != 0:
+        die((proc.stderr or f"gh pr view {number} failed").strip())
+    try:
+        return json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError:
+        die(f"could not parse gh output for #{number} as JSON")
+
+
+def html_to_text(fragment: str) -> str:
+    """Flatten Dependabot's HTML-ish body into readable lines."""
+    text = re.sub(r"<br\s*/?>", "\n", fragment, flags=re.I)
+    text = re.sub(r"<h(\d)[^>]*>", "\n## ", text, flags=re.I)
+    text = re.sub(r"<li[^>]*>", "\n- ", text, flags=re.I)
+    text = re.sub(r"</(?:p|h\d|blockquote|tr|div|ul|ol)>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text)
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    out: list[str] = []
+    for ln in lines:
+        if ln.strip() or (out and out[-1].strip()):
+            out.append(ln)
+    text = "\n".join(out).strip()
+    # Source newlines inside <ul> leave a blank line before every bullet; close them up.
+    return re.sub(r"\n\n(- )", r"\n\1", text)
+
+
+def details_blocks(body: str) -> list[tuple[str, str]]:
+    """(summary title, plain text) for every <details> block in the body, in order."""
+    blocks: list[tuple[str, str]] = []
+    for m in re.finditer(r"<details>\s*<summary>(.*?)</summary>(.*?)</details>",
+                         body or "", flags=re.I | re.S):
+        blocks.append((html_to_text(m.group(1)), html_to_text(m.group(2))))
+    return blocks
+
+
+def upstream_links(summary: str) -> list[str]:
+    """Repository links from the "Bumps [name](url) from A to B" prose."""
+    return list(dict.fromkeys(re.findall(r"\]\((https?://[^)\s]+)\)", summary)))
+
+
+def marker_lines(text: str) -> list[str]:
+    hits: list[str] = []
+    for ln in text.splitlines():
+        stripped = ln.strip(" -#")
+        if stripped and BREAKING_MARKERS.search(stripped):
+            hits.append(stripped[:200])
+    return hits
+
+
+def print_notes(pr: dict, repo: str | None) -> None:
+    attach_commits([pr], repo)
+    bump, deps, notes = classify_updates(pr)
+    checks, offenders = check_state(pr.get("statusCheckRollup"))
+    body = pr.get("body") or ""
+    summary = strip_details(body)
+    blocks = details_blocks(body)
+
+    print("=" * 78)
+    print(f"#{pr.get('number')}  {pr.get('title')}")
+    print(pr.get("url") or "")
+    print()
+    for d in deps:
+        rng = f"{d['from']} -> {d['to']}" if d["from"] and d["to"] else "(versions not stated)"
+        print(f"Dependency: {d['name']}  {rng}  [{d['bump']}]")
+    if not deps:
+        print(f"Dependency: could not be determined from the PR  [{bump}]")
+    for link in upstream_links(summary):
+        print(f"Upstream:   {link}")
+    labels = [l.get("name") for l in pr.get("labels") or []]
+    if labels:
+        print(f"Labels:     {', '.join(labels)}")
+    print(f"Checks:     {checks}" + (f" ({', '.join(offenders[:4])})" if offenders else ""))
+    files = pr.get("files") or []
+    if files:
+        print("Files:      " + ", ".join(
+            f"{f.get('path')} (+{f.get('additions', 0)}/-{f.get('deletions', 0)})" for f in files))
+    for n in notes:
+        print(f"Note:       {n}")
+
+    readable = [(title, text) for title, text in blocks if title.lower() in NOTE_BLOCKS]
+    skipped = [title for title, _ in blocks if title.lower() not in NOTE_BLOCKS]
+
+    if not readable:
+        print()
+        links = upstream_links(summary)
+        type_pkg = any(d["name"].startswith("@types/") for d in deps) or any(
+            "definitelytyped" in link.lower() for link in links)
+        if type_pkg:
+            # DefinitelyTyped has no releases and no changelog: a @types/* major means the
+            # runtime it describes moved a major, so the question is a runtime one.
+            print("No release notes: this is a type package, and DefinitelyTyped publishes "
+                  "none. Its major tracks the runtime's major, so compare the new version "
+                  "against the runtime this project actually declares (engines, .nvmrc, "
+                  "runs.using, the CI matrix) rather than looking for a changelog.")
+        else:
+            print("No release notes or changelog in the PR body. Dependabot could not find "
+                  "them upstream; read the releases on the upstream repo instead, e.g.\n"
+                  "  gh release list --repo OWNER/REPO\n"
+                  "  gh release view TAG --repo OWNER/REPO")
+    else:
+        hits: list[str] = []
+        for _, text in readable:
+            hits.extend(marker_lines(text))
+        print()
+        if hits:
+            print(f"Lines mentioning breaking changes, removals or new minimums "
+                  f"({min(len(hits), MAX_MARKER_LINES)} of {len(hits)}):")
+            for h in hits[:MAX_MARKER_LINES]:
+                print(f"  - {h}")
+        else:
+            print("No lines matched the breaking-change markers; read the notes below.")
+        for title, text in readable:
+            print()
+            print(f"--- {title} ---")
+            print(text)
+    if skipped:
+        print()
+        print(f"(also in the PR body, not shown: {', '.join(skipped)})")
+    print()
+
+
+def repo_label(prs: list[dict], repo: str | None) -> str | None:
+    coords = repo_coords(prs, repo)
+    if not coords:
+        return None
+    host, owner, name = coords
+    return f"{owner}/{name}" + (f" on {host}" if host and host != "github.com" else "")
+
+
+def print_table(rows: list[dict], had_merge_state: bool, repo: str | None = None) -> None:
+    # Say which repository this is before anything else: the default is "the one in the
+    # working directory", and a wrong cwd silently produces a plausible table for the
+    # wrong project.
+    label = repo_label(rows, repo)
+    if label:
+        print(f"Repository: {label}")
+        print()
     if not rows:
         print("No open Dependabot PRs found.")
         return
@@ -467,7 +631,15 @@ def main() -> None:
     ap.add_argument("--author", default="app/dependabot",
                     help="PR author to filter on (default app/dependabot)")
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    ap.add_argument("--notes", type=int, nargs="+", metavar="N",
+                    help="print the release notes and change evidence for these PR numbers "
+                         "instead of the inventory")
     args = ap.parse_args()
+
+    if args.notes:
+        for number in args.notes:
+            print_notes(fetch_pr(args.repo, number), args.repo)
+        return
 
     prs, had_merge_state = fetch_prs(args.repo, args.author, args.limit)
     rows = [evaluate(pr, had_merge_state) for pr in prs]
@@ -476,7 +648,7 @@ def main() -> None:
     if args.json:
         print(json.dumps(rows, indent=2))
     else:
-        print_table(rows, had_merge_state)
+        print_table(rows, had_merge_state, args.repo)
 
 
 if __name__ == "__main__":
