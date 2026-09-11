@@ -92,5 +92,18 @@
       "assessment_happens_after_the_eligible_merges_not_before"
     ],
     "files": []
+  },
+  {
+    "id": 8,
+    "prompt": "merge the dependabot PRs here — there's a major one that's been open a while, is it safe?",
+    "expected_output": "The agent should inventory and classify as usual, merge the qualifying minor/patch bumps, and hold the major back. Before treating the major's green checks as evidence, it should notice the branch is stale — CI ran against the commit the branch was cut from, not current main — and verify by comparing the PR branch's tree against the base branch (for example, counting test files in each with `git ls-tree`). If the branch is stale it should say the green tick is partial evidence rather than quoting it as clearance, and comment `@dependabot recreate` (or rebase) and read CI on the rebuilt branch before writing its risk assessment of the major.",
+    "assertions": [
+      "checks_whether_the_stale_prs_branch_is_based_on_current_main",
+      "does_not_treat_a_green_check_on_a_stale_branch_as_full_clearance",
+      "compares_the_pr_tree_against_the_base_branch_rather_than_trusting_ci_totals",
+      "asks_dependabot_to_recreate_or_rebase_instead_of_hand_rebasing_the_branch",
+      "still_holds_the_major_back_pending_an_explicit_instruction_from_the_user"
+    ],
+    "files": []
   }
 ]

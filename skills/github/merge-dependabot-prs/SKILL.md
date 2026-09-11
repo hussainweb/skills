@@ -1,10 +1,10 @@
 ---
 name: merge-dependabot-prs
-description: Merge open Dependabot pull requests in a GitHub repository using the `gh` CLI, filtered by semver bump type and CI status. Use this skill whenever the user explicitly asks to merge, clear, batch, or clean up Dependabot PRs — "merge all dependabot PRs", "clear the dependabot backlog", "merge the dependency bumps", "land the safe dependabot updates" — or invokes it as a slash command. Defaults to minor and patch bumps whose checks are all green, merged with rebase and branch deletion, and honours overrides such as including majors, merging despite failing checks, squash/merge-commit, or keeping branches. For every major bump it holds back, it reads the release notes and the project's own code to explain how safe that upgrade would be for this particular repository. Not for reviewing or merging human-authored PRs.
+description: Merge open Dependabot pull requests in a GitHub repository using the `gh` CLI, filtered by semver bump type and CI status. Use this skill whenever the user explicitly asks to merge, clear, batch, or clean up Dependabot PRs — "merge all dependabot PRs", "clear the dependabot backlog", "merge the dependency bumps", "land the safe dependabot updates" — or invokes it as a slash command. Defaults to minor and patch bumps whose checks are all green, merged with rebase and branch deletion, and honours overrides such as including majors, merging despite failing checks, squash/merge-commit, or keeping branches. For every major bump it holds back, it reads the release notes and the project's own code to explain how safe that upgrade would be for this particular repository. It also re-verifies PRs whose green checks ran against a stale base before trusting them. Not for reviewing or merging human-authored PRs.
 allowed-tools: Bash, Read
 metadata:
   authors: "Hussain Abbas"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Merge Dependabot PRs
@@ -26,6 +26,7 @@ Apply these unless the user says otherwise in the same request:
 | Version scope | Minor and patch bumps only | Major bumps carry intentional breaking changes and deserve a human. |
 | Held-back majors | Assessed, not merged | "Skipped: major" hands the user nothing to decide with; a short risk read-out for this project does. |
 | CI gate | Every check must have concluded successfully | A green build is the only evidence the bump is safe. Pending counts as not-yet-passed, and no checks at all counts as no evidence. |
+| Stale branches | Green on an old base is partial evidence | CI ran against the commit the branch was cut from. If the base has moved, a smaller suite may have run, and the output will not say so. |
 | Merge method | `--rebase` | Keeps history linear; no merge commits for dependency churn. |
 | Branch cleanup | `--delete-branch` | Dependabot branches are disposable and pile up fast. |
 | Repository | The one in the working directory | Pass `--repo OWNER/REPO` when the user names a different one. |
@@ -87,7 +88,7 @@ Each row reports the bump type (`patch`/`minor`/`major`/`unknown`), check state
 (`pass`/`failing`/`pending`/`none`), GitHub's merge state, and whether the PR clears the
 default policy. Anything the default policy would skip comes with the reason attached.
 
-Two classifications need judgement rather than blind application:
+Three classifications need judgement rather than blind application:
 
 - **`unknown` bump** — usually a SHA-pinned GitHub Action, where there is no version to
   compare. It is not safe to assume minor. Skip it by default and list it for the user.
@@ -100,6 +101,39 @@ Two classifications need judgement rather than blind application:
   When a request that names specific numbers comes back ("merge #29 and #31"), that is the
   deliberate instruction this gate was waiting for: merge them with the usual defaults,
   no further confirmation needed.
+
+- **`pass` checks on a stale branch** — green proves the bump against the commit the branch
+  was cut from, not against today's base. If the branch has sat while the base moved, the
+  suite that ran may be materially smaller than the one on the base branch now, and nothing
+  in the CI output says so. A passing run reports its own totals, and those look complete
+  unless you already know what the totals ought to be. Partial evidence, not clearance.
+
+  Check it whenever a PR has been open more than a day or two, and always for a major, where
+  the green tick is most of the evidence there is:
+
+  ```bash
+  branch=$(gh pr view <n> --json headRefName --jq .headRefName)
+  git fetch origin "$branch"
+  git merge-base --is-ancestor origin/main "origin/$branch" \
+    && echo "based on current main" || echo "STALE — CI ran against an older base"
+  ```
+
+  When it is stale, compare what the two trees actually hold. Test files are the usual tell:
+
+  ```bash
+  git ls-tree -r --name-only "origin/$branch" | grep -cE '\.test\.[jt]sx?$'
+  git ls-tree -r --name-only origin/main      | grep -cE '\.test\.[jt]sx?$'
+  ```
+
+  Repos whose runner collects by glob from the root are the exposed ones — the number of
+  files collected is a function of branch age, so a stale branch silently tests less. A real
+  case: a vitest bump whose CI proudly reported "33 passed (33)" while the base branch had
+  51 test files, because 18 had landed after the branch was cut.
+
+  If the counts differ, say so in the plan instead of quoting the green tick. The fix is
+  cheap — comment `@dependabot recreate` (see the rebase-vs-recreate guidance below for
+  which of the two), let it rebuild, and read CI on the new branch. Never hand-rebase to
+  close the gap.
 
 ### 3. Report the plan before touching anything
 
@@ -193,6 +227,12 @@ cleared to land. When the plan is empty and there is nothing to merge, deliver t
 the assessments together in one reply rather than stopping at a two-line plan; the read-out
 is the only useful thing that run can produce. Skip the assessment only when the user asked
 for that.
+
+Check staleness here too (step 2). A major that has been sitting is exactly where a green
+tick is least trustworthy and where it carries the most weight in the write-up, so say which
+base the checks actually ran against. If the branch is stale, `@dependabot recreate` and
+reading CI on the rebuilt branch is usually worth the wait before you write the assessment —
+otherwise you are grading the upgrade on a suite that no longer matches the project.
 
 Start with the bundled script, which gathers the evidence Dependabot already attached to
 the PR:
