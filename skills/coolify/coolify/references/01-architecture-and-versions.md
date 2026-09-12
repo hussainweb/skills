@@ -10,7 +10,8 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.1.x | May–Jun 2026 | 4.1.2 on 4 Jun 2026 |
 | 4.2.0 | 21 Jul 2026 | **Breaking:** API state-changing endpoints POST-only; Member role read-only |
 | 4.3.0 | 12 Aug 2026 | **Breaking:** compose proxy router naming; UI redesign; Traefik 3.7 |
-| 4.3.2 | 13 Aug 2026 | Current stable at time of writing |
+| 4.3.2 | 13 Aug 2026 | Stable at first writing |
+| 4.3.19 | observed 12 Sep 2026 | **Behaviour change:** the deployment helper mounts the SSH user's `~/.docker/config.json`, or none if absent — root-only registry logins stop working |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -76,6 +77,14 @@ Router names for Compose services whose names contain dots or hyphens now use a 
 ### 4.3.0 — deploy confirmation dialogs removed
 
 Deploy, redeploy and force-deploy fire immediately when selected. Assume a click is a deploy.
+
+### 4.3.19 — the deployment helper takes the SSH user's docker config, or none
+
+`ApplicationDeploymentJob` used to mount `/root/.docker/config.json` into the helper container (the class default for `serverUserHomeDir` was `/root`). It now resolves the home directory over the server SSH session (`echo $HOME`) and mounts `$HOME/.docker/config.json` — **and if that file does not exist, it starts the helper with no config mount, so every registry pull is anonymous.** No warning is logged.
+
+Consequence: a server where someone ran `sudo docker login ghcr.io` (credentials in root's home) while Coolify connects as `ubuntu` deployed private images successfully for as long as it was on ≤ 4.3.18, and fails on the first deploy after the upgrade to 4.3.19 with `Error error from registry: unauthorized` on the first private image and `Interrupted` on the others. The running containers are untouched, so the site stays up on the old images and nothing looks wrong until you check what is deployed. Because the version jump happens through Coolify's own auto-update, the upgrade is easy to miss: check `docker inspect coolify --format '{{.Config.Image}} {{.Created}}'` on the control plane.
+
+Fix: `docker login` as the SSH user (no `sudo`), or copy root's config into that user's home, owned by the user, mode 600. Then redeploy. Full detail and the diagnostic path in `07-github-actions-deployment.md` §2 and `08-troubleshooting.md` §2.4.
 
 ## 4. What Coolify actually is
 

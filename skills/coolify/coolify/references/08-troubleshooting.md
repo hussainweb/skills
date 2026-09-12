@@ -22,7 +22,7 @@ Every wrong answer in the episode this file is drawn from came from reasoning ab
 | Intermittent HTTPS failures, works on retry | `grep -n 'networks:' docker-compose.yml` | A custom `networks:` block puts containers on two networks; Traefik picks non-deterministically |
 | TLS presents `CN=TRAEFIK DEFAULT CERT` | `openssl s_client -connect host:443 -servername host` | Traefik was asked for that SNI and has no certificate. Usually a consequence of having no working router, not a separate ACME fault |
 | Deploy fails: `image "…": already exists` | Count services carrying `build:` | Two or more building into one `image:` tag; buildx bake races on export |
-| Deploy fails pulling an image | `docker pull <image>` **on the server** | No `docker login` for the registry, or logged in as a different user than Coolify connects as |
+| Deploy fails pulling an image | `docker pull <image>` **on the server, as the SSH user, no `sudo`** | No `docker login` for the registry, or logged in as a different user than Coolify connects as. **If it worked yesterday and Coolify upgraded overnight: 4.3.19+ mounts the SSH user's `~/.docker/config.json` into the helper, or nothing if it is missing — a root-only login stops working.** Log signature: one image `unauthorized`, the rest `Interrupted`, no new containers on the server. `07-github-actions-deployment.md` §2 |
 | Container healthy, site still 503 | `docker network inspect <resource-uuid>` | Rules network *out*: the proxy should be listed alongside your services and able to reach them directly |
 | Deploy succeeds, code unchanged | `docker inspect <container> --format '{{.Image}}'` then compare to the registry digest | Missing `pull_policy: always`; the stale local `latest` was reused |
 | CI green, nothing deployed | The deploy step's HTTP method | `GET` on `/deploy` returns `405` since 4.2.0 |
@@ -88,6 +88,15 @@ docker exec coolify-db psql -U coolify -d coolify -t -A -F' | ' -c \
 ```
 
 For a Compose resource the per-service domain lives in `docker_compose_domains`, e.g. `{"web":{"domain":"https://host"}}`. Deploy output is in `activity_log.properties`.
+
+**Deployment logs without the UI** (verified on 4.3.19): each deploy is a row in `application_deployment_queues`, and its full log is the `logs` column, a JSON array of `{"output": …, "type": "stdout"|"stderr", …}` entries. The `deployment_uuid` is the one the `/deploy` webhook response returns to CI, so a failed pipeline can be traced end to end from the Actions log:
+
+```sh
+docker exec coolify-db psql -U coolify -d coolify -t -A -c  "select deployment_uuid, status, created_at from application_deployment_queues order by id desc limit 5;"
+docker exec coolify-db psql -U coolify -d coolify -t -A -c  "select logs from application_deployment_queues where deployment_uuid='<uuid>';"  | python3 -c 'import sys,json; [print(e.get("output","")) for e in json.load(sys.stdin)]'
+```
+
+Read it bottom-up: the `Deployment failed: Command execution failed` block names the command; the lines just above it are the real error. A pull failure sits under `Pulling image-based services before stopping the current deployment` — which also tells you the old containers were never touched, so the site is still up on the previous images.
 
 **Verify the column names against your version before writing any query** (`01-architecture-and-versions.md` §5). And note that `custom_labels` holds **user-added** labels only — it is empty on most working applications, so its being empty means nothing.
 
