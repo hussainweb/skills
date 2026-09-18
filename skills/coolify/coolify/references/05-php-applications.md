@@ -133,7 +133,7 @@ worker:
 ```
 
 - `healthcheck: disable: true` is required. The worker inherits the web image's `HEALTHCHECK`, does not listen on the port, and would otherwise report `unhealthy` forever while working perfectly.
-- `--max-time` lets the process exit periodically so `restart: unless-stopped` picks up a new image after a deploy; without it a long-lived worker can keep running stale code.
+- `--max-time` lets the process exit periodically so `restart: unless-stopped` picks up a new image after a deploy; without it a long-lived worker can keep running stale code. **On Coolify 4.3.15–4.3.20 this pattern could exhaust the default ten-restart limit and leave the worker stopped** — see `01-architecture-and-versions.md` §3. Limits are opt-in and default to unlimited from 4.3.21.
 - The worker needs the **same environment variables** as the web service. Duplicating the block is verbose but explicit; a YAML anchor (`x-app-env: &app-env`) is the tidier option and Compose resolves it before Coolify sees it.
 - If cache and queue share a Redis with `allkeys-lru`, queued jobs can be evicted. See `04-shared-infrastructure.md` §5.
 

@@ -97,8 +97,8 @@ Available to every application without declaring them:
 
 | Variable | Value |
 | --- | --- |
-| `COOLIFY_FQDN` | The application's fully qualified domain name(s) |
-| `COOLIFY_URL` | The application's URL(s) |
+| `COOLIFY_FQDN` | The application's fully qualified domain name(s), comma-separated |
+| `COOLIFY_URL` | The application's URL(s), comma-separated |
 | `COOLIFY_BRANCH` | Branch name of the deployed source |
 | `COOLIFY_RESOURCE_UUID` | Coolify's identifier for the resource |
 | `COOLIFY_CONTAINER_NAME` | Generated container name |
@@ -106,6 +106,10 @@ Available to every application without declaring them:
 | `PORT` | Defaults to the image's first exposed port |
 | `HOST` | Defaults to `0.0.0.0` |
 | `SERVICE_NAME_<ID>` | Service name — useful when preview deployments vary it |
+
+**The plural was aspirational before 4.3.15.** The old implementation called `getHost()` on the whole comma-separated string, so with more than one domain **everything after the first was silently dropped**. Fixed in [#11527](https://github.com/coollabsio/coolify/pull/11527), which splits the list, removes each domain's port, and rejoins. On a multi-domain application the value these variables carry changed at 4.3.15 — check anything that parses them.
+
+A second trap, still present: on `compose_parsing_version` 1 or 2 the two are **swapped** relative to 3+. The legacy path puts the bare host in `COOLIFY_URL` and the scheme-qualified URL in `COOLIFY_FQDN`. It is pinned by test upstream, so treat it as permanent and check the resource's parsing version before trusting either name.
 
 `COOLIFY_FQDN` is genuinely present inside the container, not only during compose interpolation. Nonetheless declare it explicitly in your own `environment:` block so the dependency is visible and the stack works under plain `docker compose`:
 

@@ -11,7 +11,9 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.2.0 | 21 Jul 2026 | **Breaking:** API state-changing endpoints POST-only; Member role read-only |
 | 4.3.0 | 12 Aug 2026 | **Breaking:** compose proxy router naming; UI redesign; Traefik 3.7 |
 | 4.3.2 | 13 Aug 2026 | Stable at first writing |
-| 4.3.19 | observed 12 Sep 2026 | **Behaviour change:** the deployment helper mounts the SSH user's `~/.docker/config.json`, or none if absent — root-only registry logins stop working |
+| 4.3.15 | 3 Sep 2026 | **Behaviour change:** domain ports moved out of `fqdn` into `domain_port_overrides`; restart limits introduced with a default of 10 |
+| 4.3.19 | 10 Sep 2026 | **Behaviour change:** Sentinel mandatory on regular servers; compose images pulled *before* the old containers stop |
+| 4.3.22 | 18 Sep 2026 | **Breaking:** host-path persistent volumes removed from UI and API |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -78,13 +80,73 @@ Router names for Compose services whose names contain dots or hyphens now use a 
 
 Deploy, redeploy and force-deploy fire immediately when selected. Assume a click is a deploy.
 
-### 4.3.19 — the deployment helper takes the SSH user's docker config, or none
+### 4.3.15 — domain ports moved into a separate override map
 
-`ApplicationDeploymentJob` used to mount `/root/.docker/config.json` into the helper container (the class default for `serverUserHomeDir` was `/root`). It now resolves the home directory over the server SSH session (`echo $HOME`) and mounts `$HOME/.docker/config.json` — **and if that file does not exist, it starts the helper with no config mount, so every registry pull is anonymous.** No warning is logged.
+A `saving` hook on `Application`, `ApplicationPreview` and `ServiceApplication` now runs `DomainPortOverrides::normalize()`, which strips the port out of the domain and stores it alongside:
 
-Consequence: a server where someone ran `sudo docker login ghcr.io` (credentials in root's home) while Coolify connects as `ubuntu` deployed private images successfully for as long as it was on ≤ 4.3.18, and fails on the first deploy after the upgrade to 4.3.19 with `Error error from registry: unauthorized` on the first private image and `Interrupted` on the others. The running containers are untouched, so the site stays up on the old images and nothing looks wrong until you check what is deployed. Because the version jump happens through Coolify's own auto-update, the upgrade is easy to miss: check `docker inspect coolify --format '{{.Config.Image}} {{.Created}}'` on the control plane.
+```
+fqdn "https://host:8080"  →  fqdn "https://host" + domain_port_overrides {"https://host": 8080}
+```
+
+New columns on all three tables (`add_domain_port_overrides_to_*`). The label generator followed:
+
+```php
+// ≤ 4.3.14
+$port = $url->getPort();
+// 4.3.15+
+$port = $url->getPort() ?? ($domainPortOverrides[$portlessDomain] ?? null);
+```
+
+Three consequences:
+
+- **A portless domain no longer means "no port configured."** Check `domain_port_overrides` before concluding anything from the domain string alone.
+- **Entering `https://host:8080` still works as input**, but the domain will read back portless and the port appears in its own UI field. Someone who expects the port to persist in the URL will think the edit did not take.
+- **It converts lazily.** The hook only fires `if isDirty('fqdn')`, so both shapes coexist until each resource's domain is next saved. There is no bulk migration.
+
+4.3.16 and 4.3.18 extended this to Compose: proxy labels now use **each service's own configured ports**, with the application port only as a fallback, and multi-service Compose domains no longer inherit the application port. A Compose service domain that had no explicit port may now resolve to a different container port than it did before.
+
+### 4.3.19 — Sentinel is mandatory on regular servers
+
+The enable/disable setting is **read-only in both the UI and the API**. Migration `enable_sentinel_for_existing_regular_servers` switches it on for every server that is reachable, usable, not force-disabled, not a build server and not Swarm. Sentinel itself went 0.0.22 → 1.0.1, and 4.3.22 added real-time sync status. A server where Sentinel had been deliberately disabled will have it back on after the upgrade, and it cannot be turned off again.
+
+### 4.3.22 — host-path persistent volumes removed
+
+Host-path configuration is gone from the UI **and** the API; a request carrying `host_path` is now rejected. Scope matters and the release note does not state it: the column still exists on `local_persistent_volumes` and is still consumed at deploy time, so **existing bind mounts keep deploying** — they simply cannot be created or edited through those routes any more. Bind mounts declared in your own `docker-compose.yml` are unaffected, since those come from the file. Any automation that `PATCH`es storage with `host_path` breaks.
+
+### 4.3.15–4.3.21 — the restart-limit episode
+
+A default `max_restart_count` of 10 arrived around 4.3.15 for applications, preview deployments and service applications; databases were exempted in 4.3.17; 4.3.19 added settings and API support; **4.3.21 made limits opt-in, defaulted them to 0 (unlimited), and reset any row still sitting at exactly 10**.
+
+On 4.3.15–4.3.20 a container that restarted ten times was held stopped. That interacts directly with the `restart: unless-stopped` convention in `02-docker-compose.md` and with the deliberately short-lived worker pattern in `05-php-applications.md` §5 — a worker exiting on `--max-time` to pick up a new image could exhaust the cap. Nothing to do on 4.3.21+; worth knowing if you are diagnosing anything that happened in that window.
+
+### 4.3.15 — `COOLIFY_FQDN` / `COOLIFY_URL` with multiple domains
+
+Before 4.3.15 these were computed by calling `getHost()` on the entire comma-separated domain string, so **everything after the first domain was silently dropped**. Fixed in [#11527](https://github.com/coollabsio/coolify/pull/11527): the value is now split, each domain has its port removed, and the list is rejoined. If you have a multi-domain application, the value these variables carry changed.
+
+Separately, and still true: on `compose_parsing_version` 1 or 2 the two variables are **swapped** relative to 3+ — the legacy path puts the bare host in `COOLIFY_URL` and the scheme-qualified URL in `COOLIFY_FQDN`. Pinned by test, so do not expect it to be quietly corrected.
+
+### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
+
+**The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged. (The `private string $serverUserHomeDir = '/root'` default is immediately overwritten on the line that runs and has never been the operative value.)
+
+Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22**:
+
+```php
+$this->serverUserHomeDir = instant_remote_process(['echo $HOME'], $this->server);
+$this->dockerConfigFileExists = instant_remote_process([
+    "test -f {$this->serverUserHomeDir}/.docker/config.json && echo 'OK' || echo 'NOK'"
+], $this->server);
+```
+
+Only the build-server path throws on a missing config; the ordinary path silently omits the mount.
+
+**What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance.
+
+Symptom, unchanged and still the thing to recognise: a server where someone ran `sudo docker login ghcr.io` (credentials in root's home) while Coolify connects as `ubuntu` fails with `Error error from registry: unauthorized` on the first private image and `Interrupted` on the others. Because the pull now happens before anything stops, the running containers are untouched, the site stays up on the old images, and nothing looks wrong until you check what is deployed. The version jump arrives through Coolify's own auto-update, so it is easy to miss: check `docker inspect coolify --format '{{.Config.Image}} {{.Created}}'` on the control plane.
 
 Fix: `docker login` as the SSH user (no `sudo`), or copy root's config into that user's home, owned by the user, mode 600. Then redeploy. Full detail and the diagnostic path in `07-github-actions-deployment.md` §2 and `08-troubleshooting.md` §2.4.
+
+**Open:** if the config mount has been conditional since at least 4.1.2, what authenticated the pull before 4.3.19? Not established. Candidates: the pull previously ran through a path that reached the daemon's own credentials, or those deploys were never actually pulling a private image. Recorded in §4 of `08-troubleshooting.md` rather than guessed at.
 
 ## 4. What Coolify actually is
 
@@ -187,8 +249,8 @@ In a typical cloud deployment the application servers admit SSH only from the co
 Treat these as version-bound and check rather than recall:
 
 - Magic variable syntax and semantics (`SERVICE_FQDN_*`, `SERVICE_URL_*`, `SERVICE_PASSWORD*`), including which forms are recognised and what each emits.
-- Where a domain is stored for a Compose resource — `applications.fqdn` vs `applications.docker_compose_domains` — and which one the UI writes.
-- The generated Traefik label set, and whether `loadbalancer.server.port` is ever emitted.
+- Where a domain is stored for a Compose resource — `applications.fqdn` vs `applications.docker_compose_domains` — and which one the UI writes. Note that `docker_compose_domains` keys changed in 4.3.0 from underscore-normalised names to the original compose service names, with dual-read for the old shape.
+- The generated Traefik label set. (`loadbalancer.server.port` *is* emitted, whenever a port resolves — from the domain string on ≤ 4.3.14, from `domain_port_overrides` on 4.3.15+. It is absent only when no port is configured at all.)
 - The `applications` table schema.
 - Whether the Traefik API is exposed. On 4.1.x it is not (`--api.insecure=false`), so Traefik cannot be asked what it resolved.
 - Pre/post-deployment commands and scheduled tasks — availability, and which container they target.
