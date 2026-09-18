@@ -1,16 +1,12 @@
 ---
 name: capture-learning
 description: >-
-  Auto-capture technical realizations to Logseq when the user shares how
-  tools/systems actually work. PROACTIVELY invoke without waiting to be asked.
-  Pattern: declarative statements (not questions) revealing expectation vs
-  reality — 'didn't know X does Y', 'turns out Z', '[tool] actually
-  [behavior]', 'figured out why', 'the reason is', 'good to know', 'oh
-  interesting', 'TIL', 'wait so', 'huh'. Save: non-obvious behaviors,
-  corrected assumptions, debugged root causes, system quirks, newly discovered
-  CLI flags or options. Skip: questions, task requests, trivial fixes,
-  secondhand info (something a colleague found). Manual trigger: user says
-  'capture/save/document this learning'.
+  Auto-capture technical realizations to Logseq when the user shares how tools or systems
+  actually work. PROACTIVELY invoke without waiting to be asked. Pattern: declarative statements
+  (not questions) revealing expectation vs reality — 'didn't know X does Y', 'turns out Z',
+  '[tool] actually [behavior]', 'figured out why', 'the reason is', 'good to know', 'oh
+  interesting', 'TIL', 'wait so', 'huh'. Skip questions, task requests, trivial fixes, and
+  secondhand info. Manual trigger: user says 'capture/save/document this learning'.
 ---
 # Capture Learning
 

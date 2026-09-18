@@ -1,6 +1,6 @@
 ---
 name: coolify
-description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.3.x) — Docker Compose resources, environment-variable conventions that make settings overrideable in the UI, shared databases and Redis, PHP/Laravel/Drupal deployments, GitHub Actions pipelines that build on the server or push to GHCR, and diagnosing 503 / "no available server" routing failures. Use this skill whenever Coolify is mentioned or present (a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook), and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "coolify deploy", "deploy webhook", "coolify compose", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "deploy to my VPS with coolify".
+description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.3.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
 allowed-tools: Read, Glob, Grep, Bash, WebFetch
 ---
 
