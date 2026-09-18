@@ -63,6 +63,7 @@ Repository automation driven through the `gh` CLI.
 
 | Skill | Install | Description |
 |-------|---------|-------------|
+| [dependabot-config](./skills/github/dependabot-config/SKILL.md) | `npx skills add hussainweb/skills@dependabot-config` | Write and review `.github/dependabot.yml` — plain weekly schedules with no pinned time, every ecosystem in the repo covered, dependencies grouped by release family, and cooldown/multi-directory options used only where they earn their place |
 | [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating; explains how safe each held-back major bump is for the project |
 
 ### Writing and notes
