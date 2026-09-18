@@ -4,7 +4,9 @@ Copy-paste starting points, drawn from configs already in use. Adjust the group 
 to the packages that are genuinely in the manifest — delete any family the repo does not
 have rather than leaving an empty group behind.
 
-Every block uses a bare `interval: weekly` with no `time:` and no `timezone:`.
+Every block uses a bare `interval: weekly` with no `day:`, `time:` or `timezone:`.
+Add those only when the user asks for a particular schedule, and then add them to
+every entry in the file.
 
 ## Drupal site (composer + theme npm + actions)
 

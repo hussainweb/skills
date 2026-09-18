@@ -21,33 +21,49 @@ how the packages actually release**. Everything else is detail.
 | Rule | Why |
 |---|---|
 | `interval: weekly` | Daily is noise. Weekly is the rhythm dependency review actually happens on. |
-| **Never** set `time:` | A pinned hour buys nothing — nobody is waiting at their desk for the PRs, and it makes the file look precise about something that does not matter. |
-| **Never** set `timezone:` | It only exists to qualify `time:`. Without `time:` it is dead config. |
+| No `day:`, `time:` or `timezone:` unless asked for | See below — they are defaults to leave alone, not keys to fill in. |
 | Every ecosystem in the repo gets an entry | A config that covers `npm` but not `github-actions` silently rots the CI pipeline. |
 | Nothing ungrouped that has a family | Ungrouped means one PR per package per week. |
 | `version: 2` at the top | v1 is long dead. |
 
-`day:` is the one scheduling key that is allowed, and it is still optional. Omit it by
-default — weekly without a day runs on Monday. Set it only to deliberately stagger, for
-example a Drupal site that reviews dependencies on a Friday, or to keep two noisy repos
-from landing on the same morning. When it is set, set it on *every* entry in that file.
+### The scheduling keys to leave alone
+
+`day:`, `time:` and `timezone:` are all **off by default**. Never add one on your own
+initiative, and never carry one over when copying a config from another repo — that is
+how they spread. The schedule should be two lines:
 
 ```yaml
-# Right.
 schedule:
   interval: weekly
+```
 
-# Also right — a deliberate, repo-wide stagger.
+The reasoning, so it can be explained rather than just asserted:
+
+- **`time:`** — a pinned hour buys nothing. Nobody is waiting at their desk for the PRs,
+  and it makes the file look precise about something that does not matter.
+- **`timezone:`** — it exists only to qualify `time:`. Without `time:` it is dead config.
+- **`day:`** — weekly without a day already runs on Monday, which is fine.
+
+**When the user explicitly asks for one, set it.** This is a default, not a prohibition,
+and the user knows their own reasons — a team that reviews dependencies on a Friday, a
+release window to stay clear of, two noisy repos that should not land on the same
+morning. Do not argue the point or re-raise it later; just write what was asked for:
+
+```yaml
+# Fine, because it was asked for.
 schedule:
   interval: weekly
   day: friday
-
-# Wrong. Delete the bottom two lines.
-schedule:
-  interval: weekly
   time: "09:00"
   timezone: "Asia/Kolkata"
 ```
+
+Two things to get right when honouring such a request:
+
+- `time:` is UTC unless a `timezone:` accompanies it, so a request phrased in local time
+  needs the `timezone:` too. Say so rather than silently writing a UTC hour.
+- Apply it to *every* entry in the file, not just the one being edited. A file where
+  composer runs Friday and github-actions runs Monday is the worst of both.
 
 Dependabot also accepts `monthly`, `quarterly`, `semiannually`, `yearly`, and a raw
 `cron` expression, and GitHub's own guidance now leans monthly as a default. Weekly is
@@ -241,7 +257,8 @@ takes a line of attention and returns none.
 
 Walk it in this order:
 
-1. Any `time:` or `timezone:`? Delete them.
+1. Any `day:`, `time:` or `timezone:`? Drop them — unless the user says they want that
+   schedule, in which case make it consistent across every entry instead.
 2. `interval` anything other than `weekly`? Justify or fix.
 3. Manifest in the repo with no matching entry? Add it — check theme and test
    subdirectories, they are the ones usually missed.
