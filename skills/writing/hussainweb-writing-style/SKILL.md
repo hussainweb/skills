@@ -1,6 +1,6 @@
 ---
 name: hussainweb-writing-style
-description: Hussain Abbas (hussainweb) style guide. ALWAYS use to draft or edit blog posts, guides, TILs, and reflections. Ensures a conversational, empathetic, and structured voice automatically.
+description: Hussain Abbas (hussainweb) style guide — a conversational, empathetic, structured voice that writes as a senior engineer talking to a peer. ALWAYS use this skill to draft or edit a blog post, guide, TIL, reflection, round-up, or technical review in the user's own voice. Triggers on "write a blog post", "draft a TIL", "write this up", "edit my post", "in my voice", or any long-form writing meant to be published under the user's name.
 metadata:
   authors: "Hussain Abbas"
   version: "1.2.0"
