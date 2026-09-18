@@ -1,6 +1,6 @@
 ---
 name: logseq-organization
-description: Use this skill whenever interacting with, formatting, generating, or modifying Logseq notes for the user. It ensures that notes, journals, tags, and namespaces conform strictly to the user's specific Logseq organization patterns and vault directory structures.
+description: Format and file Logseq notes to this user's vault conventions — the `journals/` and `pages/` directories, `YYYY_MM_DD.md` journal filenames, heading-and-hashtag categories, namespaces, and page properties. Use this skill whenever reading, creating, formatting, or modifying Logseq notes. Triggers on "logseq", "journal entry", "daily note", "add this to my notes", "#learnings", "namespace", or any edit to a file inside a Logseq vault.
 ---
 # Logseq Organization
 
