@@ -19,10 +19,11 @@ Every wrong answer in the episode this file is drawn from came from reasoning ab
 | `503 no available server` | Count `traefik.*` labels on the container (§2.1) | **0 labels → the resource has no domain set.** No domain, no router |
 | `503`, but 11+ labels present | Count the image's exposed ports (§2.2) | More than one exposed port and no `loadbalancer.server.port` → Traefik cannot infer which |
 | `404` on HTTP, `503` on HTTPS | As above | A router exists for HTTPS only; same problem |
+| Compose service routes to the wrong port after upgrading | Read the service's own `ports:`/exposed ports, then `domain_port_overrides` | 4.3.16/4.3.18 made Compose labels use **each service's** ports with the application port only as a fallback; a service domain with no explicit port no longer inherits the application's |
 | Intermittent HTTPS failures, works on retry | `grep -n 'networks:' docker-compose.yml` | A custom `networks:` block puts containers on two networks; Traefik picks non-deterministically |
 | TLS presents `CN=TRAEFIK DEFAULT CERT` | `openssl s_client -connect host:443 -servername host` | Traefik was asked for that SNI and has no certificate. Usually a consequence of having no working router, not a separate ACME fault |
 | Deploy fails: `image "…": already exists` | Count services carrying `build:` | Two or more building into one `image:` tag; buildx bake races on export |
-| Deploy fails pulling an image | `docker pull <image>` **on the server, as the SSH user, no `sudo`** | No `docker login` for the registry, or logged in as a different user than Coolify connects as. **If it worked yesterday and Coolify upgraded overnight: 4.3.19+ mounts the SSH user's `~/.docker/config.json` into the helper, or nothing if it is missing — a root-only login stops working.** Log signature: one image `unauthorized`, the rest `Interrupted`, no new containers on the server. `07-github-actions-deployment.md` §2 |
+| Deploy fails pulling an image | `docker pull <image>` **on the server, as the SSH user, no `sudo`** | No `docker login` for the registry, or logged in as a different user than Coolify connects as. **If it worked yesterday and Coolify upgraded overnight: the helper has always mounted the SSH user's `~/.docker/config.json`, or nothing if it is missing; 4.3.19 moved the image pull ahead of the container stop, which is what makes a root-only login start failing visibly.** Log signature: one image `unauthorized`, the rest `Interrupted`, no new containers on the server. `07-github-actions-deployment.md` §2 |
 | Container healthy, site still 503 | `docker network inspect <resource-uuid>` | Rules network *out*: the proxy should be listed alongside your services and able to reach them directly |
 | Deploy succeeds, code unchanged | `docker inspect <container> --format '{{.Image}}'` then compare to the registry digest | Missing `pull_policy: always`; the stale local `latest` was reused |
 | CI green, nothing deployed | The deploy step's HTTP method | `GET` on `/deploy` returns `405` since 4.2.0 |
@@ -49,7 +50,16 @@ docker inspect <container> --format '{{range $k,$v := .Config.Labels}}{{$k}}={{$
 {{end}}' | grep traefik | sort
 ```
 
-Note: a working Coolify app has **no** `traefik.http.services.*.loadbalancer.server.port` label. Its absence proves nothing.
+Note: a Coolify app with no port configured has **no** `traefik.http.services.*.loadbalancer.server.port` label, so its absence proves nothing on its own.
+
+On **4.3.15+** the inference in the other direction broke too: the port is no longer read from the domain string but from `domain_port_overrides`, so a portless domain does **not** mean no port is set. Check the column:
+
+```sh
+docker exec coolify-db psql -U coolify -d coolify -t -A -F' | ' -c \
+ "select name, coalesce(nullif(fqdn,''),'<EMPTY>'),
+         coalesce(domain_port_overrides::text,'<NULL>')
+  from applications order by name;"
+```
 
 ### 2.2 How many ports does the image expose?
 
@@ -140,7 +150,7 @@ One `503 no available server`. Five explanations were produced and acted on befo
 | Theory | Killed by |
 | --- | --- |
 | The health check rejected the empty-database 302, so the container was unhealthy and Traefik dropped it | The container reported **healthy** throughout the 503 |
-| `SERVICE_FQDN_<SVC>_<PORT>` suppressed the `loadbalancer.server.port` label, and Traefik cannot infer a port from four | No port label is generated **either way**, and a working app on the host has none either |
+| `SERVICE_FQDN_<SVC>_<PORT>` suppressed the `loadbalancer.server.port` label, and Traefik cannot infer a port from four | No port label is generated **either way**, and a working app on the host has none either. (Observed on 4.1.x. From 4.3.15 the label *is* generated whenever a port resolves, including from `domain_port_overrides` — so re-run this check rather than reusing the conclusion.) |
 | `coolify-proxy` was not attached to the resource's network | It was, and it could reach the container on `:80` directly — it got the app's 401 |
 | `applications.custom_labels` was empty in Coolify's database | **Nine of ten** applications on that host had it empty and worked; it holds user-added labels only |
 | `docker_compose_raw` was stale relative to git | Bad test — it was grepped for a string appearing only in a **comment**, and Coolify strips comments |
@@ -153,7 +163,8 @@ The one command that would have ended it in seconds is §2.1 — count the Traef
 
 Recorded so they are not silently re-derived as facts:
 
-- **Why can a domain empty itself?** Observed once on a resource where it had previously been set and working. The only plausible link was that `SERVICE_FQDN_<SVC>_<PORT>` had just been removed from the compose file. Testable: remove it from a working resource, redeploy several times, see whether the domain survives.
-- **How does Traefik resolve the port** for a container exposing four, given no `server.port` label and no `--providers.docker.network` constraint? Candidates: lowest-numbered exposed port, or Coolify supplying it by a route not visible in the labels. The Traefik API is not exposed, so this could not be answered from the host.
+- **Why can a domain empty itself?** Observed once on a resource where it had previously been set and working. The only plausible link was that `SERVICE_FQDN_<SVC>_<PORT>` had just been removed from the compose file. Testable: remove it from a working resource, redeploy several times, see whether the domain survives. **Bounded to ≤ 4.3.16** — 4.3.17 changed the regeneration guard from "is the domain value null?" to "does a key exist for this service?" (`hasComposeServiceDomainEntry`), so any retest must run on current and the old result cannot be carried forward.
+- **How does Traefik resolve the port** for a container exposing four, given no `server.port` label and no `--providers.docker.network` constraint? Candidates: lowest-numbered exposed port, or Coolify supplying it by a route not visible in the labels. The Traefik API is not exposed, so this could not be answered from the host. Still open for the no-port case; note that from 4.3.15 a configured port *does* produce an explicit label, so the ambiguity now only arises when no port is set anywhere.
+- **What authenticated private registry pulls before 4.3.19?** The helper's docker-config mount has been conditional on the SSH user's `~/.docker/config.json` existing since at least 4.1.2 — verified identical at v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22 — yet private pulls demonstrably succeeded before the upgrade. 4.3.19 only moved the pull earlier (`361d5a3c8`). So either the earlier pull ran through a path that reached credentials another way, or those deploys were not pulling a private image at all. Not established; do not assert a mechanism without testing one.
 - **Does Coolify fail a deploy on an unhealthy container?** It surfaces health prominently; whether it gates is untested.
 - **Do post-deployment commands and scheduled tasks behave as documented, and what happens on failure?** Untested.

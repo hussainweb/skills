@@ -35,9 +35,15 @@ echo "$GITHUB_PAT" | docker login ghcr.io -u "$GITHUB_USERNAME" --password-stdin
 
 Details that cause trouble:
 
-- **Log in as the user Coolify connects as — and since 4.3.19 this is enforced, not advised.** Credentials land in `~/.docker/config.json` for *that* user — `/root/.docker/config.json` when Coolify SSHs as root, `/home/ubuntu/.docker/config.json` when it connects as `ubuntu`. Check the user with `select name, ip, "user" from servers;` on `coolify-db`.
+- **Log in as the user Coolify connects as.** This has always been the requirement, not a 4.3.19 change. Credentials land in `~/.docker/config.json` for *that* user — `/root/.docker/config.json` when Coolify SSHs as root, `/home/ubuntu/.docker/config.json` when it connects as `ubuntu`. Check the user with `select name, ip, "user" from servers;` on `coolify-db`.
 
-  Before 4.3.19 the deployment helper always mounted `/root/.docker/config.json`, so a login done as root worked even when Coolify connected as `ubuntu` (root via `sudo docker login` is the natural thing to type, and it worked by accident). **From 4.3.19 the helper resolves `$HOME` over the server's SSH session and mounts `$HOME/.docker/config.json`; when that file does not exist it starts the helper with no config mount at all and every pull is anonymous.** A server that deployed fine for weeks fails on the first deploy after the upgrade with `Error error from registry: unauthorized` on one private image and `Interrupted` on the rest, and nothing hints at the upgrade. Verified in `app/Jobs/ApplicationDeploymentJob.php` on 4.3.19 (`serverUserHomeDir` was a hard-coded `/root` default; it is now `instant_remote_process(['echo $HOME'])`). The fix is a login for the SSH user itself, or the same config file copied into that user's home, owned by that user with mode 600.
+  **The helper resolves `$HOME` over the server's SSH session and mounts `$HOME/.docker/config.json`; when that file does not exist it starts the helper with no config mount at all and every pull is anonymous.** No warning is logged. This is long-standing behaviour — verified line-for-line identical in `app/Jobs/ApplicationDeploymentJob.php` at **v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22**. The `private string $serverUserHomeDir = '/root'` default is overwritten by `instant_remote_process(['echo $HOME'])` on the line that runs, so it has never been the operative value.
+
+  **What 4.3.19 changed is *when* the pull happens** — `361d5a3c8 feat(deploy): pull compose images before stopping containers` moved it ahead of stopping the old containers. That is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure: a server that appeared to deploy fine for weeks fails on the first deploy after the upgrade with `Error error from registry: unauthorized` on one private image and `Interrupted` on the rest, with nothing hinting at the upgrade. The silver lining of the new ordering is that the old containers are never touched, so the site stays up on the previous images.
+
+  *Open question, deliberately not guessed at:* if the config mount has been conditional since at least 4.1.2, what authenticated these pulls before 4.3.19? Not established — see `08-troubleshooting.md` §4.
+
+  The fix is unchanged: a login for the SSH user itself, or the same config file copied into that user's home, owned by that user with mode 600.
 - **The PAT needs `read:packages`**, nothing more, for pulling. A classic PAT works; a fine-grained token needs the package read permission on the owner.
 - **Do this on every destination server**, including every node of a Swarm cluster — each node pulls independently.
 - The login persists across reboots. It does not persist across a rebuilt server, and a rotated PAT breaks it silently until the next pull.
@@ -47,7 +53,7 @@ Details that cause trouble:
   docker pull ghcr.io/<org>/<repo>:latest
   ```
 
-  A `denied` or `unauthorized` here is the whole problem; anything Coolify reports is downstream of it. **Run it as the user Coolify connects as, without `sudo`** — `sudo docker pull` reads root's config and can succeed while the deploy still fails (4.3.19+, above).
+  A `denied` or `unauthorized` here is the whole problem; anything Coolify reports is downstream of it. **Run it as the user Coolify connects as, without `sudo`** — `sudo docker pull` reads root's config and can succeed while the deploy still fails (see above).
 
 ### `pull_policy: always`
 
@@ -384,7 +390,7 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | --- | --- | --- |
 | CI green, site unchanged | The deploy step's HTTP method | `GET` against Coolify ≥ 4.2.0 → `405` |
 | CI green, deploy green, site unchanged | `pull_policy` in the compose file | Missing → stale local `latest` reused |
-| Deploy fails pulling the image | `docker pull ghcr.io/<org>/<repo>:latest` **on the server, as the SSH user, without `sudo`** | No `docker login`, or logged in as the wrong user. **Started failing right after a Coolify upgrade → 4.3.19+ mounts the SSH user's config (or none); the login only exists for root.** See §2 |
+| Deploy fails pulling the image | `docker pull ghcr.io/<org>/<repo>:latest` **on the server, as the SSH user, without `sudo`** | No `docker login`, or logged in as the wrong user. **Started failing right after a Coolify upgrade → 4.3.19 moved the image pull before the container stop, surfacing an anonymous pull that was already happening; the login only exists for root.** See §2 |
 | Prune job succeeds, storage still growing | The `package-name` value | It is the package name, not `owner/repo` |
 | Deploy step sees empty `COOLIFY_WEBHOOK_URL` though "the secret is set" | Where the secret lives vs the job's `environment:` | Secret stored on an environment the job does not name (wrong name, or no `environment:` line at all), or the named environment was silently auto-created empty — see §7 |
 | Two deploys per push | Coolify's git-source auto-deploy | Both Coolify's webhook and CI are triggering |

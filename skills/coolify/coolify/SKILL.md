@@ -32,12 +32,14 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.3.x** (4.3.19 observed 12 Sep 2026; 4.3.2 on 13 Aug 2026) |
+| Stable line at time of writing | **4.3.x** (4.3.22 on 18 Sep 2026; 4.3.0 on 12 Aug 2026) |
 | First stable 4.0.0 | 27 Apr 2026 |
 | State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405` |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional |
 | Deploy endpoint | `POST /api/v1/deploy?uuid=<uuid>` |
-| Registry login the helper uses | **The SSH user's** `~/.docker/config.json` since 4.3.19 — or none, silently, if that file is missing |
+| Registry login the helper uses | **The SSH user's** `~/.docker/config.json` — or none, silently, if that file is missing. Long-standing, *not* new in 4.3.19 |
+| Domain ports | Stored separately from the domain since 4.3.15 (`domain_port_overrides`); the URL itself is portless |
+| Sentinel | **Mandatory** on regular servers since 4.3.19; the toggle is read-only in UI and API |
 
 Full version-sensitivity guidance and recent breaking changes: `references/01-architecture-and-versions.md`.
 
