@@ -1,6 +1,6 @@
 ---
 name: dependabot-config
-description: Write or review `.github/dependabot.yml` the way this author does — weekly schedules with no pinned time or timezone, every ecosystem in the repo covered, and dependencies grouped by release family so a week's updates arrive as a handful of PRs instead of dozens. Use this skill whenever a Dependabot config is being created, edited, reviewed, or copied into a new repo; when setting up automated dependency updates for a project; or when the user says "dependabot config", "dependabot.yml", "set up dependabot", "group the dependabot PRs", "too many dependabot PRs", or asks why a dependency is not being updated. Covers composer (Drupal and Laravel), npm, github-actions, docker-compose, pip/uv, and gomod, plus grouping, cooldown, and multi-directory setups. Not for merging Dependabot PRs — that is merge-dependabot-prs.
+description: Write or review a repository's `.github/dependabot.yml` following this author's conventions. Use this skill whenever a Dependabot config is being created, edited, reviewed, or copied into a new repo, when setting up automated dependency updates for a project, or when the user says "dependabot config", "dependabot.yml", "set up dependabot", "group the dependabot PRs", "too many dependabot PRs", or asks why a dependency is never updated. Covers composer, npm, github-actions, docker-compose, pip/uv, and gomod. Not for merging Dependabot PRs — that is merge-dependabot-prs.
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 metadata:
   authors: "Hussain Abbas"
