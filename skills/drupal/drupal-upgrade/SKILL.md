@@ -1,6 +1,6 @@
 ---
 name: drupal-upgrade
-description: Guide a Drupal major version upgrade from start to finish. Use this skill whenever someone needs to upgrade Drupal from one major version to the next (e.g., 10 to 11, 11 to 12), assess upgrade readiness, fix deprecations, resolve compatibility issues, or plan an upgrade timeline. Triggers on "upgrade drupal", "major version upgrade", "drupal 10 to 11", "deprecation scan", "upgrade readiness", "is my site ready for drupal X?", "plan the upgrade", "fix deprecations", or any mention of preparing a Drupal codebase for the next major version.
+description: Guide a Drupal major version upgrade from start to finish. Use this skill whenever someone needs to upgrade Drupal from one major version to the next, assess upgrade readiness, fix deprecations, or plan an upgrade timeline. Triggers on "upgrade drupal", "major version upgrade", "drupal 10 to 11", "deprecation scan", "upgrade readiness", "is my site ready for drupal X?", "plan the upgrade", or "fix deprecations".
 allowed-tools: Read, Grep, Glob, Bash
 argument-hint: [current-version target-version]
 ---

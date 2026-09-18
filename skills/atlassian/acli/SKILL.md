@@ -1,6 +1,6 @@
 ---
 name: acli
-description: Drive Atlassian Cloud (Jira and Confluence) from the command line via `acli`. Use this skill whenever the user wants to view, search, create, edit, transition, comment on, or link Jira work items; manage Jira projects, boards, sprints, or filters; view Confluence pages; or create/list Confluence spaces and blog posts. Triggers on "acli", "atlassian cli", "jira issue", "jira ticket", "work item", any Jira-style issue key (e.g. PROJ-123), "JQL", "confluence page", "confluence space", "confluence blog", or requests to authenticate to Jira/Confluence with an API token. Prefer this skill over hand-rolled REST calls whenever `acli` is installed.
+description: Drive Atlassian Cloud (Jira and Confluence) from the command line via `acli`. Use this skill whenever the user wants to view, search, create, edit, transition, comment on, or link Jira work items, or work with Jira boards and sprints or Confluence pages, spaces, and blogs. Triggers on "acli", "atlassian cli", "jira issue", "jira ticket", "work item", any Jira-style issue key (e.g. PROJ-123), "JQL", "confluence page", "confluence space", or authenticating to Jira/Confluence with an API token. Prefer it over hand-rolled REST calls whenever `acli` is installed.
 allowed-tools: Bash, Read, Grep, Glob
 metadata:
   authors: "Hussain Abbas"

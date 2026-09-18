@@ -1,6 +1,6 @@
 ---
 name: ddev
-description: Guide command execution in DDEV-based projects. Use this skill whenever a project uses DDEV (has a .ddev/ directory), when commands like composer, npm, drush, artisan, wp, or other CLI tools need to run inside DDEV containers, when configuring DDEV services, or when managing DDEV add-ons. Triggers on "ddev", "run composer in ddev", "ddev add-on", "ddev config", or any command execution in a project that has a .ddev directory. Also triggers when users ask about adding services like Redis, Elasticsearch, Solr, or other infrastructure to a DDEV project.
+description: Guide command execution in DDEV-based projects. Use this skill whenever a project has a .ddev/ directory, when commands like composer, npm, drush, artisan, or wp need to run inside DDEV containers, when configuring DDEV services, or when managing DDEV add-ons. Triggers on "ddev", "run composer in ddev", "ddev add-on", "ddev config", any command execution in a project that has a .ddev directory, and questions about adding services like Redis, Elasticsearch, or Solr to a DDEV project.
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
