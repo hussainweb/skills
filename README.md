@@ -66,6 +66,14 @@ Repository automation driven through the `gh` CLI.
 | [dependabot-config](./skills/github/dependabot-config/SKILL.md) | `npx skills add hussainweb/skills@dependabot-config` | Write and review `.github/dependabot.yml` — plain weekly schedules with no pinned time, every ecosystem in the repo covered, dependencies grouped by release family, and cooldown/multi-directory options used only where they earn their place |
 | [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating; explains how safe each held-back major bump is for the project |
 
+### Beads
+
+Multi-agent work sessions driven by the [beads](https://github.com/gastownhall/beads) (`bd`) issue tracker.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [beads-orchestrate](./skills/beads/beads-orchestrate/SKILL.md) | `npx skills add hussainweb/skills@beads-orchestrate` | Run a multi-agent session over an epic or the ready queue — front-load the user's decisions, plan waves from dependencies and file overlap, launch self-contained agent prompts, relay reports, and close out, with beads notes as the shared memory |
+
 ### Writing and notes
 
 Personal writing voice and note-taking conventions.

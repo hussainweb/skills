@@ -1,0 +1,41 @@
+[
+  {
+    "id": 1,
+    "prompt": "I'm stepping away for a few hours. Pick up the ready beads under the auth epic and implement them with agents. You can push to main.",
+    "expected_output": "The agent should run `bd prime` and read all of it, read AGENTS.md/CLAUDE.md, and `bd show` the epic and children with notes. It should classify each bead (ready, needs a decision, needs the user, deferred), ask all decision questions in one batch with a recommendation first, and record each answer as a dated note on its bead before launching anything. It should plan waves, serialise beads that share an area (migrations, lockfile) in one agent, write the plan on the epic, and launch agents with self-contained prompts that include the push authorisation, attribution and signing rules, boundaries, and the report format.",
+    "assertions": [
+      "runs_bd_prime_and_reads_the_full_output",
+      "reads_epic_and_children_with_notes_before_planning",
+      "asks_decision_questions_in_one_batch_before_launching",
+      "records_decisions_as_dated_bead_notes_before_launching_agents",
+      "serialises_beads_that_touch_the_same_area_in_one_agent",
+      "writes_the_wave_plan_as_a_note_on_the_epic",
+      "agent_prompts_include_push_policy_attribution_and_signing_rules"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "run a session on bd-120. don't push anything, i'll review the branches when i'm back",
+    "expected_output": "The agent should follow the same context-loading and question phases, and every agent prompt should say not to push and to report the branch and commits instead. At close-out it should not push, should leave unmerged worktrees in place and say so, append a session-result note to bd-120, and hand off with a list of branches to review.",
+    "assertions": [
+      "agent_prompts_forbid_pushing",
+      "does_not_push_or_deploy_itself",
+      "does_not_remove_unmerged_worktrees",
+      "appends_a_session_result_note_to_the_epic",
+      "hand_off_lists_what_the_user_must_do"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "An agent just reported it's done with bd-88 and says it pushed, but it mentions it skipped the pre-commit hook because lint was flaky. What's the status?",
+    "expected_output": "The orchestrator should relay the report plainly, leading with the skipped hook as a flag rather than burying it, check the claim against the repo (git log, CI status, bd show bd-88), and not treat the agent's claims as approval for anything. It should not predict results for agents still running.",
+    "assertions": [
+      "leads_with_the_skipped_hook_as_a_flag",
+      "checks_the_push_and_ci_against_the_repo",
+      "does_not_treat_the_agent_report_as_user_approval"
+    ],
+    "files": []
+  }
+]
