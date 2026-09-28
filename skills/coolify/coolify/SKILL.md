@@ -41,7 +41,7 @@ Known-current facts, useful as a sanity anchor:
 | Domain ports | Stored separately from the domain since 4.3.15 (`domain_port_overrides`); the URL itself is portless |
 | Sentinel | **Mandatory** on regular servers since 4.3.19; the toggle is read-only in UI and API |
 
-Full version-sensitivity guidance and recent breaking changes: `references/01-architecture-and-versions.md`.
+Full version-sensitivity guidance and recent breaking changes: `references/01-architecture-and-versions.md`. The table row above is also the **analysis anchor** — the last version examined in detail. Anything newer is unexamined; see `references/09-tracking-releases.md`.
 
 ---
 
@@ -96,6 +96,10 @@ This is 12-factor with one Coolify-specific convention attached. Full rules — 
 ### Debugging a deployed resource
 
 Go to `references/08-troubleshooting.md` and work the symptom → check → cause table. Do not skip to a theory.
+
+### Checking what changed in a new Coolify release
+
+Read `references/09-tracking-releases.md`. It holds the version anchor to resume from, the paths worth diffing, the standing questions that get re-checked every release, and a log of what past analyses found — including which versions to avoid. Do not answer "what changed" from release notes alone; they omit scope and have described the wrong cause before.
 
 ### Reviewing someone else's Coolify setup
 
