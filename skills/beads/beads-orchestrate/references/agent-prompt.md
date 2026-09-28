@@ -39,6 +39,10 @@ does not re-open it:
 > - `<agent/bead>` owns `<paths or area>` (e.g. the auth package, database migrations, the lockfile)
 >
 > If you find you need to change something in those areas, stop and report instead.
+>
+> Do not fan out into your own checkout. If you delegate to sub-agents, give each its own
+> worktree, or run them one at a time. Parallel writers in one working tree leave a
+> half-written shared state when anything interrupts them.
 
 ## 5. Workspace setup (parallel agents in worktrees)
 
@@ -50,11 +54,28 @@ does not re-open it:
 > <fresh dependency install, e.g. npm ci>
 > ```
 
+Use the remote base only when it is current. With no remote, or with unpushed work on
+`main`, have the agent create its worktree from local `main` instead:
+
+> ```bash
+> git -C <repo> worktree add ../<repo>-wt/<name> -b <branch> main
+> cd ../<repo>-wt/<name>
+> <give the dev environment a unique, uncommitted name, e.g. printf 'name: <project>-<name>\n' > .ddev/config.local.yaml>
+> <fresh dependency install and site/app setup>
+> ```
+>
+> Never run commands that modify the main checkout; another agent may be working there.
+> If the beads live in another repo, run bd as `BEADS_DIR=<beads repo>/.beads bd ...`.
+> Before reporting, rebase onto `main` if it moved, rerun the gates, and stop your dev
+> environment.
+
 ## 6. Quality gates and commits
 
 > - Before every commit run `<the repo's gates, e.g. npm run lint && npm run typecheck && npm test>`.
 >   Don't commit on a red gate.
-> - Commit atomically, one logical change per commit, as Conventional Commits.
+> - Commit atomically, one logical change per commit, as Conventional Commits. Commit each
+>   verified piece as soon as it passes; don't hold a large uncommitted change. Sessions can
+>   be cut off without warning, and committed work survives them.
 > - `<user's attribution rule, e.g. "Never add Co-Authored-By or any AI attribution.">`
 > - If commit signing fails or hangs, `<user's rule, e.g. "commit unsigned with
 >   git -c commit.gpgsign=false commit and list those commits in your report">`.
