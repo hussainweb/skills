@@ -107,7 +107,7 @@ Available to every application without declaring them:
 | `HOST` | Defaults to `0.0.0.0` |
 | `SERVICE_NAME_<ID>` | Service name — useful when preview deployments vary it |
 
-**The plural was aspirational before 4.3.15.** The old implementation called `getHost()` on the whole comma-separated string, so with more than one domain **everything after the first was silently dropped**. Fixed in [#11527](https://github.com/coollabsio/coolify/pull/11527), which splits the list, removes each domain's port, and rejoins. On a multi-domain application the value these variables carry changed at 4.3.15 — check anything that parses them.
+**The plural was aspirational before 4.3.15.** With more than one domain, **everything after the first was silently dropped**. Fixed in [#11527](https://github.com/coollabsio/coolify/pull/11527). On a multi-domain application the value these variables carry changed at 4.3.15 — check anything that parses them.
 
 A second trap, still present: on `compose_parsing_version` 1 or 2 the two are **swapped** relative to 3+. The legacy path puts the bare host in `COOLIFY_URL` and the scheme-qualified URL in `COOLIFY_FQDN`. It is pinned by test upstream, so treat it as permanent and check the resource's parsing version before trusting either name.
 

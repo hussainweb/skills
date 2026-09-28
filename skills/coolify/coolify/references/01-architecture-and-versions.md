@@ -83,26 +83,17 @@ Deploy, redeploy and force-deploy fire immediately when selected. Assume a click
 
 ### 4.3.15 — domain ports moved into a separate override map
 
-A `saving` hook on `Application`, `ApplicationPreview` and `ServiceApplication` now runs `DomainPortOverrides::normalize()`, which strips the port out of the domain and stores it alongside:
+On save, the port is stripped out of the domain and stored alongside it, and the label generator reads it from there:
 
 ```
 fqdn "https://host:8080"  →  fqdn "https://host" + domain_port_overrides {"https://host": 8080}
-```
-
-New columns on all three tables (`add_domain_port_overrides_to_*`). The label generator followed:
-
-```php
-// ≤ 4.3.14
-$port = $url->getPort();
-// 4.3.15+
-$port = $url->getPort() ?? ($domainPortOverrides[$portlessDomain] ?? null);
 ```
 
 Three consequences:
 
 - **A portless domain no longer means "no port configured."** Check `domain_port_overrides` before concluding anything from the domain string alone.
 - **Entering `https://host:8080` still works as input**, but the domain will read back portless and the port appears in its own UI field. Someone who expects the port to persist in the URL will think the edit did not take.
-- **It converts lazily.** The hook only fires `if isDirty('fqdn')`, so both shapes coexist until each resource's domain is next saved. There is no bulk migration.
+- **It converts lazily.** Both shapes coexist until each resource's domain is next saved. There is no bulk migration.
 
 4.3.16 and 4.3.18 extended this to Compose: proxy labels now use **each service's own configured ports**, with the application port only as a fallback, and multi-service Compose domains no longer inherit the application port. A Compose service domain that had no explicit port may now resolve to a different container port than it did before.
 
@@ -114,15 +105,9 @@ The enable/disable setting is **read-only in both the UI and the API**. Migratio
 
 Host-path configuration is gone from the UI **and** the API; a request carrying `host_path` is now rejected. Scope matters and the release note does not state it: the column still exists on `local_persistent_volumes` and is still consumed at deploy time, so **existing bind mounts keep deploying** — they simply cannot be created or edited through those routes any more. Bind mounts declared in your own `docker-compose.yml` are unaffected, since those come from the file. Any automation that `PATCH`es storage with `host_path` breaks.
 
-### 4.3.15–4.3.21 — the restart-limit episode
-
-A default `max_restart_count` of 10 arrived around 4.3.15 for applications, preview deployments and service applications; databases were exempted in 4.3.17; 4.3.19 added settings and API support; **4.3.21 made limits opt-in, defaulted them to 0 (unlimited), and reset any row still sitting at exactly 10**.
-
-On 4.3.15–4.3.20 a container that restarted ten times was held stopped. That interacts directly with the `restart: unless-stopped` convention in `02-docker-compose.md` and with the deliberately short-lived worker pattern in `05-php-applications.md` §5 — a worker exiting on `--max-time` to pick up a new image could exhaust the cap. Nothing to do on 4.3.21+; worth knowing if you are diagnosing anything that happened in that window.
-
 ### 4.3.15 — `COOLIFY_FQDN` / `COOLIFY_URL` with multiple domains
 
-Before 4.3.15 these were computed by calling `getHost()` on the entire comma-separated domain string, so **everything after the first domain was silently dropped**. Fixed in [#11527](https://github.com/coollabsio/coolify/pull/11527): the value is now split, each domain has its port removed, and the list is rejoined. If you have a multi-domain application, the value these variables carry changed.
+Before 4.3.15, with more than one domain, **everything after the first was silently dropped**. Fixed in [#11527](https://github.com/coollabsio/coolify/pull/11527). If you have a multi-domain application, the value these variables carry changed.
 
 Separately, and still true: on `compose_parsing_version` 1 or 2 the two variables are **swapped** relative to 3+ — the legacy path puts the bare host in `COOLIFY_URL` and the scheme-qualified URL in `COOLIFY_FQDN`. Pinned by test, so do not expect it to be quietly corrected.
 
@@ -130,37 +115,15 @@ Separately, and still true: on `compose_parsing_version` 1 or 2 the two variable
 
 **Skip 4.3.22.** It was Latest for 96 minutes before 4.3.23 replaced it, so few instances will have caught it, but the failure is severe and its signature is confusing.
 
-4.3.22 removed the `->trim()` from where `ExecuteRemoteCommand` stores saved command output, to stop whitespace loss corrupting generated Dockerfiles:
-
-```php
-// ≤ 4.3.21 and 4.3.23+
-$this->saved_outputs->put($this->save, str($output)->trim());
-// 4.3.22
-$this->saved_outputs->put($this->save, str($output));
-```
-
-Every consumer comparing a saved output by string equality broke. The deployment health check asks `docker inspect --format='{{json .State.Health.Status}}'`, which answers `"healthy"\n`; untrimmed, `replace('"','')` yields `healthy\n`, which matches neither the `'healthy'` nor the `'unhealthy'` branch. The wait loop therefore runs every `health_check_retries` attempt with the full `health_check_interval` between them, exits with `newVersionIsHealthy` still false, and the deploy is treated as unhealthy — while the container is, in fact, healthy.
-
-Same mechanism broke Nixpacks type detection, the commit message recorded against a deployment, and the `stat -c '%F'` check that decides whether a file-storage mount is a directory or a file.
-
-4.3.23 restores the trim on the non-append store path and adds a `trimmedSavedOutput()` helper at the read sites. The **append** path stays untrimmed — that is the case the original change actually needed, accumulating multi-chunk output.
+4.3.22 stopped trimming saved command output, so the health-check wait loop never recognises `healthy`: it exhausts every retry and the deploy is treated as unhealthy — while the container is, in fact, healthy. The same bug broke Nixpacks type detection, the commit message recorded against a deployment, and the check that decides whether a file-storage mount is a directory or a file. 4.3.23 fixes it.
 
 Only resources whose health check Coolify waits on are affected, which for Compose resources is most of them (§7 of `02-docker-compose.md`: they inherit the image's `HEALTHCHECK`).
 
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 
-**The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged. (The `private string $serverUserHomeDir = '/root'` default is immediately overwritten on the line that runs and has never been the operative value.)
+**The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged.
 
-Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22**:
-
-```php
-$this->serverUserHomeDir = instant_remote_process(['echo $HOME'], $this->server);
-$this->dockerConfigFileExists = instant_remote_process([
-    "test -f {$this->serverUserHomeDir}/.docker/config.json && echo 'OK' || echo 'NOK'"
-], $this->server);
-```
-
-Only the build-server path throws on a missing config; the ordinary path silently omits the mount.
+Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22**. Only the build-server path throws on a missing config; the ordinary path silently omits the mount.
 
 **What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance.
 
@@ -168,22 +131,12 @@ Symptom, unchanged and still the thing to recognise: a server where someone ran 
 
 Fix: `docker login` as the SSH user (no `sudo`), or copy root's config into that user's home, owned by the user, mode 600. Then redeploy. Full detail and the diagnostic path in `07-github-actions-deployment.md` §2 and `08-troubleshooting.md` §2.4.
 
-**Why it worked before — leading explanation, not yet confirmed.** 4.3.19 did not merely move the pull, it changed *which command pulls*. The new step runs
-
-```
-docker compose ... pull --ignore-buildable
-```
-
-which pulls **every image-based service unconditionally**. Previously the only pull was whatever `docker compose up -d` did on its own, and `up` pulls an image **only when it is missing locally** — and, when a pull fails but a usable local image exists, warns and carries on rather than exiting non-zero. `docker compose pull` has no such fallback.
-
-That fits every observed symptom: the anonymous pull was very likely failing *before* 4.3.19 too, silently, with the server quietly continuing to run whatever image it already had. What changed is that the failure became fatal and visible. It is also why the `pull_policy: always` rule inverted at this version — see `02-docker-compose.md` §8B.
-
-Confirming it takes one test: on a server with no `~/.docker/config.json` for the SSH user, and the private image already present locally, run the `up` and the `pull` forms by hand and compare exit codes. Until someone does that, treat it as the leading hypothesis and not a fact. Recorded in §4 of `08-troubleshooting.md`.
+**Why it worked before** is an open question with a leading, unconfirmed explanation and a test that would settle it: §4 of `08-troubleshooting.md`.
 
 **What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23:
 
-- The deploy's pre-pull and `docker compose up` both run via `executeInDocker`, **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`. They use the **SSH user's** login.
-- Every host-side `docker compose up -d` — restart, start-after-stop, `StartService`, `DeployServiceApplication`, auto-start after a reboot — goes through `instant_remote_process`, which calls `parseCommandsByLineForSudo` whenever `$server->isNonRoot()`. Sudo-wrapped, it reads **root's** `~/.docker/config.json`.
+- The deploy's pre-pull and `docker compose up` both run **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`. They use the **SSH user's** login.
+- Every host-side `docker compose up -d` — restart, start-after-stop, service deploy, auto-start after a reboot — is sudo-wrapped whenever the server is non-root, so it reads **root's** `~/.docker/config.json`.
 - Build-server deploys run on the host too, and Coolify passes `up --pull always` explicitly, so they pull as root whatever the compose file says.
 
 Observed consequence: with the login configured for the SSH user only, a private image pulls successfully during deploy and then fails `unauthorized` a few steps later, on the same image, as soon as something host-side is made to pull. `pull_policy: always` is what usually makes it pull — which is why that rule inverted at 4.3.19. See `02-docker-compose.md` §8B.

@@ -71,8 +71,8 @@ gh issue view 5364 --repo coollabsio/coolify --json state,updatedAt
 
 Unchanged from 4.1.2 through 4.3.23. Two hazards persist for anyone using the workaround:
 
-- **Do not press "Refetch" on the Permissions tab.** `checkPermissions()` calls `syncGithubAppName()`, which overwrites the source's Coolify name with the real app slug — collapsing the distinct names that tell the organizations apart, since the resource picker shows only name and `html_url`.
-- **"Update on GitHub" 404s.** `getPermissionsPath()` builds `/organizations/{org}/settings/apps/...` when `organization` is set, but in this setup that field is the installation *target*, not the app *owner*.
+- **Do not press "Refetch" on the Permissions tab.** It overwrites the source's Coolify name with the real app slug — collapsing the distinct names that tell the organizations apart, since the resource picker shows only name and `html_url`.
+- **"Update on GitHub" 404s.** The link is built as `/organizations/{org}/settings/apps/...` when `organization` is set, but in this setup that field is the installation *target*, not the app *owner*.
 
 ### Compose routing and domains
 
