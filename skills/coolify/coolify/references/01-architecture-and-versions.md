@@ -18,7 +18,7 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
-This is not hypothetical. A query written against `applications.is_container_label_escape_enabled`, a column remembered from an older schema, failed outright:
+This is not hypothetical. A query written against `applications.is_container_label_escape_enabled` failed outright — the column is real, but it lives on `application_settings` and `services`, not `applications`:
 
 ```
 ERROR:  column "is_container_label_escape_enabled" does not exist

@@ -102,7 +102,20 @@ Each row is a change that altered behaviour for an existing setup. Detail lives 
 - **An unhealthy container does not fail a deploy.** Observed directly: deployment reported as passed while the application was failing. A green deploy means the containers started.
 - **Coolify pulls from two credential contexts** — the helper uses the SSH user's docker config, host-side commands are sudo-wrapped and use root's. See `02-docker-compose.md` §8B.
 
-## 7. Where the output goes
+## 7. What is worth recording
+
+**Something earns a place in this skill if it changes what you would do or recommend.** Not if it is interesting, and not because it was discovered.
+
+- A symptom someone will hit, with a cause and a fix → a row in `08-troubleshooting.md`.
+- A rule that changes how a compose file, workflow or variable should be written → the relevant reference, stated as the rule, with only as much mechanism as the rule needs.
+- Something that changed once, will not change again, and needs no action → one line in the log above. That is what the log is for.
+- Internal structure that changes no action → leave it out, however well understood.
+
+The failure mode this guards against is transcribing the source. A worked example: Coolify's `compose_parsing_version` selects which parser a resource goes through, and the temptation is to document the dispatch. The only part that changes an action is that legacy resources swap `COOLIFY_URL` and `COOLIFY_FQDN` — so that is recorded, in `03-environment-variables.md` §6, and the dispatch is not.
+
+Apply the same test when a finding decays. A bug fixed three releases ago that only ever affected an operation most people never perform has stopped changing anything; it belongs in the log, or nowhere.
+
+## 8. Where the output goes
 
 - **Findings that generalise** — this skill, as a PR. Update the version anchor in `SKILL.md` in the same change.
 - **Anything about specific servers** — which host runs what, which user holds which registry login, instance versions — belongs in private notes. This repository is public.
