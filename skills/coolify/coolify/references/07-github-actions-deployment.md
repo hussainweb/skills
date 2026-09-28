@@ -6,7 +6,7 @@ Two deployment models, the CI that implements each, and the server-side setup th
 
 | | **A. Build on the Coolify server** | **B. Build in CI, pull from a registry** |
 | --- | --- | --- |
-| Compose contains | `build:` | `image:` + `pull_policy: always` |
+| Compose contains | `build:` | `image:` (no `pull_policy` on 4.3.19+) |
 | Build time counts as | Deploy time | CI time, before the deploy starts |
 | Build resources | The production server's CPU, RAM, disk | GitHub-hosted runners |
 | Layer cache | The server's local Docker cache | `type=gha`, shared across runs |
@@ -55,9 +55,13 @@ Details that cause trouble:
 
   A `denied` or `unauthorized` here is the whole problem; anything Coolify reports is downstream of it. **Run it as the user Coolify connects as, without `sudo`** — `sudo docker pull` reads root's config and can succeed while the deploy still fails (see above).
 
-### `pull_policy: always`
+### `pull_policy: always` — omit it on 4.3.19+
 
-Without it, a deploy that finds a local image already tagged `latest` reuses it. The deploy reports success and ships nothing. See `02-docker-compose.md` §8B.
+The rule inverted. From 4.3.19 Coolify pre-pulls every image-based compose service itself, so the line no longer buys anything on deploy — and it makes **host-side** `docker compose up -d` (restart, start-after-stop, service deploy, auto-start after reboot) attempt a pull. Those run sudo-wrapped on a non-root server, so they read **root's** `~/.docker/config.json`, not the SSH user's, and fail with `unauthorized` on an image that deployed successfully minutes earlier.
+
+This is the trap that follows directly from doing §2 correctly: log in as the SSH user, and the helper-run deploy pull works while every host-side pull does not. Omit `pull_policy: always` rather than also logging in as root. Full table of which pull runs where: `02-docker-compose.md` §8B.
+
+On ≤ 4.3.18 there is no pre-pull, so the line is still required there.
 
 ### Package visibility
 
@@ -350,7 +354,7 @@ Before emitting this job for a real repository, establish the target:
 
 ### What the deploy actually does
 
-In model B, the deploy re-runs `docker compose up -d` on the server. Because the compose file says `pull_policy: always`, Docker fetches the new `latest`. Nothing rebuilds. The whole deploy is a pull and a container replacement, typically seconds.
+In model B, the deploy pre-pulls every image-based service (4.3.19+) and then re-runs `docker compose up -d`, so Docker fetches the new `latest`. Nothing rebuilds. The whole deploy is a pull and a container replacement, typically seconds.
 
 ### Waiting for the result
 
@@ -389,7 +393,8 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | Symptom | Check | Cause |
 | --- | --- | --- |
 | CI green, site unchanged | The deploy step's HTTP method | `GET` against Coolify ≥ 4.2.0 → `405` |
-| CI green, deploy green, site unchanged | `pull_policy` in the compose file | Missing → stale local `latest` reused |
+| CI green, deploy green, site unchanged | Coolify version, then `pull_policy` in the compose file | On ≤ 4.3.18, a missing `pull_policy: always` reuses the stale local `latest`. On 4.3.19+ Coolify pre-pulls, so look elsewhere |
+| Image pulls once, then `unauthorized` on the same image a few steps later | Whether `pull_policy: always` is set, and which user holds the registry login | The helper pull uses the **SSH user's** config; a host-side `up` forced to pull by `pull_policy: always` is sudo-wrapped and uses **root's**. Drop the line (4.3.19+) — see §2 |
 | Deploy fails pulling the image | `docker pull ghcr.io/<org>/<repo>:latest` **on the server, as the SSH user, without `sudo`** | No `docker login`, or logged in as the wrong user. **Started failing right after a Coolify upgrade → 4.3.19 moved the image pull before the container stop, surfacing an anonymous pull that was already happening; the login only exists for root.** See §2 |
 | Prune job succeeds, storage still growing | The `package-name` value | It is the package name, not `owner/repo` |
 | Deploy step sees empty `COOLIFY_WEBHOOK_URL` though "the secret is set" | Where the secret lives vs the job's `environment:` | Secret stored on an environment the job does not name (wrong name, or no `environment:` line at all), or the named environment was silently auto-created empty — see §7 |

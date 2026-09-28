@@ -2,7 +2,7 @@
   {
     "id": 1,
     "prompt": "Set up a docker-compose.yml so I can deploy this Laravel app to Coolify. It needs Redis for cache and queues, and it talks to a MySQL server we already run elsewhere.",
-    "expected_output": "The agent should produce a compose file with a `web` service, a `worker` service running `php artisan queue:work` (with `healthcheck: {disable: true}`), and an in-stack `redis`. Every operator-tunable value must be written as `${VAR:-default}` — DB_HOST, DB_PORT, DB_DATABASE, REDIS_HOST etc. — with `APP_KEY=${APP_KEY}` having no default. It must NOT define a `networks:` block and must NOT publish any `ports:`. It should note that the config cache must be rebuilt post-deploy or env changes will not take effect.",
+    "expected_output": "The agent should produce a compose file with a `web` service, a `worker` service running `php artisan queue:work` (with `healthcheck: {disable: true}`), and an in-stack `redis`. Every operator-tunable value must be written as `${VAR:-default}` \u2014 DB_HOST, DB_PORT, DB_DATABASE, REDIS_HOST etc. \u2014 with `APP_KEY=${APP_KEY}` having no default. It must NOT define a `networks:` block and must NOT publish any `ports:`. It should note that the config cache must be rebuilt post-deploy or env changes will not take effect.",
     "assertions": [
       "no_custom_networks_block",
       "no_published_ports",
@@ -16,12 +16,12 @@
   {
     "id": 2,
     "prompt": "Our GitHub Actions pipeline builds the image and pushes it to GHCR, then curls the Coolify webhook. The build is green but the site never updates. What's wrong?",
-    "expected_output": "The agent should check two things before theorising: whether the deploy curl issues a POST (Coolify >= 4.2.0 rejects GET on /deploy with 405), and whether the compose file sets `pull_policy: always` (without it the stale local `latest` is reused). It should also establish the running Coolify version rather than assuming. It should not immediately propose rewriting the Dockerfile or the workflow wholesale.",
+    "expected_output": "The agent should check two things before theorising: whether the deploy curl issues a POST (Coolify >= 4.2.0 rejects GET on /deploy with 405), and what the running Coolify version is, because the pull rule depends on it. On <= 4.3.18 a missing `pull_policy: always` means the stale local `latest` is reused. On 4.3.19+ Coolify pre-pulls every image-based compose service itself, so `pull_policy` is not the explanation and setting it causes a different failure (host-side pulls run as root). It should not immediately propose rewriting the Dockerfile or the workflow wholesale.",
     "assertions": [
       "checks_http_method_is_post",
       "mentions_405_breaking_change_in_4_2_0",
-      "checks_pull_policy_always",
       "establishes_coolify_version",
+      "ties_pull_behaviour_to_version_not_a_fixed_rule",
       "does_not_guess_before_checking"
     ],
     "files": []
@@ -29,7 +29,7 @@
   {
     "id": 3,
     "prompt": "My Coolify app returns 503 no available server. The container reports healthy and the proxy is on the right network. Ideas?",
-    "expected_output": "The agent should run the Traefik label count on the container (`docker inspect ... | grep -c traefik`) as the first move, and identify that zero labels means the resource has no domain set, so no router exists. It should also suggest comparing side by side against a working resource on the same host. It should NOT propose that empty `custom_labels` in the database, or the absence of a `loadbalancer.server.port` label, is the cause — a working app has neither.",
+    "expected_output": "The agent should run the Traefik label count on the container (`docker inspect ... | grep -c traefik`) as the first move, and identify that zero labels means the resource has no domain set, so no router exists. It should also suggest comparing side by side against a working resource on the same host. It should NOT propose that empty `custom_labels` in the database, or the absence of a `loadbalancer.server.port` label, is the cause \u2014 a working app has neither.",
     "assertions": [
       "counts_traefik_labels_first",
       "identifies_missing_domain_as_likely_cause",

@@ -176,9 +176,17 @@ docker compose ... pull --ignore-buildable
 
 which pulls **every image-based service unconditionally**. Previously the only pull was whatever `docker compose up -d` did on its own, and `up` pulls an image **only when it is missing locally** — and, when a pull fails but a usable local image exists, warns and carries on rather than exiting non-zero. `docker compose pull` has no such fallback.
 
-That fits every observed symptom: the anonymous pull was very likely failing *before* 4.3.19 too, silently, with the server quietly continuing to run whatever image it already had. What changed is that the failure became fatal and visible. It also explains why `pull_policy: always` matters more than it looks — see `02-docker-compose.md` §8B.
+That fits every observed symptom: the anonymous pull was very likely failing *before* 4.3.19 too, silently, with the server quietly continuing to run whatever image it already had. What changed is that the failure became fatal and visible. It is also why the `pull_policy: always` rule inverted at this version — see `02-docker-compose.md` §8B.
 
 Confirming it takes one test: on a server with no `~/.docker/config.json` for the SSH user, and the private image already present locally, run the `up` and the `pull` forms by hand and compare exit codes. Until someone does that, treat it as the leading hypothesis and not a fact. Recorded in §4 of `08-troubleshooting.md`.
+
+**What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23:
+
+- The deploy's pre-pull and `docker compose up` both run via `executeInDocker`, **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`. They use the **SSH user's** login.
+- Every host-side `docker compose up -d` — restart, start-after-stop, `StartService`, `DeployServiceApplication`, auto-start after a reboot — goes through `instant_remote_process`, which calls `parseCommandsByLineForSudo` whenever `$server->isNonRoot()`. Sudo-wrapped, it reads **root's** `~/.docker/config.json`.
+- Build-server deploys run on the host too, and Coolify passes `up --pull always` explicitly, so they pull as root whatever the compose file says.
+
+Observed consequence: with the login configured for the SSH user only, a private image pulls successfully during deploy and then fails `unauthorized` a few steps later, on the same image, as soon as something host-side is made to pull. `pull_policy: always` is what usually makes it pull — which is why that rule inverted at 4.3.19. See `02-docker-compose.md` §8B.
 
 ## 4. What Coolify actually is
 

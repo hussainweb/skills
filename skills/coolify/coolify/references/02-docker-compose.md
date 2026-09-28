@@ -205,7 +205,7 @@ Build time *is* deploy time, and the server's layer cache is the only thing betw
 services:
   web:
     image: ghcr.io/<org>/<repo>:latest
-    pull_policy: always          # required — see below
+    # no pull_policy: always — see below
     restart: unless-stopped
     environment:
       - APP_ENV=${APP_ENV:-production}
@@ -214,7 +214,6 @@ services:
 
   worker:
     image: ghcr.io/<org>/<repo>:latest
-    pull_policy: always
     restart: unless-stopped
     command: php artisan queue:work --tries=3 --timeout=90
     healthcheck:
@@ -224,7 +223,25 @@ volumes:
   app-storage:
 ```
 
-**`pull_policy: always` is not optional in this shape.** Without it, a redeploy that finds a local image tagged `latest` will use the stale one, and the deploy will appear to succeed while shipping nothing. Note that from 4.3.19 Coolify additionally runs `docker compose pull --ignore-buildable` before stopping the old containers, which pulls regardless of `pull_policy` — so a broken registry login now fails the deploy outright instead of quietly serving the stale image. That is an improvement, but it means a server that appeared to be deploying fine may simply have been reusing local images; see `01-architecture-and-versions.md` §3. See `07-github-actions-deployment.md` for the registry side, including the `docker login` that must be run on the server.
+**`pull_policy: always` — the rule inverted at 4.3.19. Do not set it on 4.3.19+.**
+
+It used to be mandatory in this shape: without it a redeploy that found a local image tagged `latest` reused it, reporting success and shipping nothing. From **4.3.19** Coolify runs `docker compose pull --ignore-buildable` itself, unconditionally, on every compose deploy before it stops the old containers. The stale-image problem the rule existed to prevent is therefore solved by the platform, and the rule is now redundant — and actively harmful, because of where the two pulls run.
+
+**Coolify pulls from two different credential contexts.** Get this wrong and the same image pulls successfully and then fails minutes later:
+
+| What runs | Where | Whose `~/.docker/config.json` |
+| --- | --- | --- |
+| Deploy pre-pull and `docker compose up` | **Inside the helper** (`executeInDocker`) | The **SSH user's**, bind-mounted to `/root/.docker/config.json` in the helper |
+| Restart, start-after-stop, service deploy, auto-start after reboot | **On the host**, via `instant_remote_process` | **root's** — the command is sudo-wrapped whenever the server is non-root |
+| Build-server deploys | **On the host**, and Coolify passes `up --pull always` explicitly | **root's**, regardless of what the compose file says |
+
+So with a login configured only for the SSH user — which is what `07-github-actions-deployment.md` §2 tells you to do, and is right — the deploy pull succeeds inside the helper, and then any host-side `docker compose up -d` that `pull_policy: always` forces into pulling fails with `unauthorized` on an image that pulled fine moments earlier.
+
+Dropping the line means a host-side restart uses the image already on the server. That is the correct behaviour: a restart should not silently change which build is running. Deploys still get a fresh image, because Coolify pre-pulls.
+
+**On ≤ 4.3.18 there is no pre-pull step, so `pull_policy: always` is still required there** — and on those versions a non-root server needs root to hold the registry login too. Check the version before deciding (Rule 0).
+
+See `07-github-actions-deployment.md` §2 for the registry side, and `01-architecture-and-versions.md` §3 for the 4.3.19 pull-ordering change.
 
 ### C. Single service, compiled binary — the minimal case
 
@@ -234,7 +251,6 @@ Nothing here is PHP-specific. A Go, Rust, or Node service reduces to one service
 services:
   app:
     image: ghcr.io/<org>/<repo>:latest
-    pull_policy: always
     restart: unless-stopped
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -284,7 +300,7 @@ Relevant only to shape A, but it is where deploy time goes.
 - [ ] No `ports:` on any proxied service
 - [ ] At most one `build:` per `image:` tag
 - [ ] Service names lowercase, no dots
-- [ ] `pull_policy: always` on every registry-image service
+- [ ] **No** `pull_policy: always` on 4.3.19+ (Coolify pre-pulls; the line breaks host-side restarts) — required only on ≤ 4.3.18
 - [ ] `restart: unless-stopped` on long-lived services — but see `01-architecture-and-versions.md` §3 on 4.3.15–4.3.20, where a default limit of ten restarts could hold a container stopped
 - [ ] `healthcheck: {disable: true}` on workers and sidecars that do not listen
 - [ ] Every operator-tunable value written as `${VAR:-default}` (see `03-environment-variables.md`)

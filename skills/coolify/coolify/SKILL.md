@@ -110,7 +110,7 @@ Flag these on sight, in any Coolify-targeted compose file:
 - A custom `networks:` block. Coolify creates and manages the network; defining your own causes intermittent HTTPS outages because containers land on two networks and Traefik picks non-deterministically.
 - `ports:` on a service that is meant to be reached through the proxy. It bypasses Traefik, exposes the container on the host interface, and invalidates any assumption that `X-Forwarded-*` headers are trustworthy.
 - Two or more services carrying `build:` while sharing one `image:` tag. buildx bake runs them in parallel and they race on export: `image "…": already exists`.
-- An image tag with no `pull_policy: always` in a registry-pull deployment. Redeploy will keep serving the stale local copy of `latest`.
+- `pull_policy: always` in a registry-pull deployment on 4.3.19+. Coolify already pre-pulls every deploy, and the line makes host-side restarts try to pull as **root** rather than as the SSH user, failing with `unauthorized` on an image that deployed fine. Required only on ≤ 4.3.18, where there is no pre-pull.
 - Secrets baked into the image, or committed in the compose file rather than referenced as `${VAR}`.
 - A healthcheck that only accepts `200`. See `references/05-php-applications.md` §4 — 302, 401 and 403 are all normal for a correctly configured app in some states.
 
