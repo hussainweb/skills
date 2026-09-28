@@ -4,7 +4,7 @@ description: Merge open Dependabot pull requests in a GitHub repository using th
 allowed-tools: Bash, Read
 metadata:
   authors: "Hussain Abbas"
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # Merge Dependabot PRs
@@ -26,6 +26,7 @@ Apply these unless the user says otherwise in the same request:
 | Version scope | Minor and patch bumps only | Major bumps carry intentional breaking changes and deserve a human. |
 | Held-back majors | Assessed, not merged | "Skipped: major" hands the user nothing to decide with; a short risk read-out for this project does. |
 | CI gate | Every check must have concluded successfully | A green build is the only evidence the bump is safe. Pending counts as not-yet-passed, and no checks at all counts as no evidence. |
+| Workflow approvals | Always confirm before approving | Automated pipeline commits trigger `action_required` on subsequent runs. Approving runs code with repo permissions; never approve without user confirmation. |
 | Stale branches | Green on an old base is partial evidence | CI ran against the commit the branch was cut from. If the base has moved, a smaller suite may have run, and the output will not say so. |
 | Merge method | `--rebase` | Keeps history linear; no merge commits for dependency churn. |
 | Branch cleanup | `--delete-branch` | Dependabot branches are disposable and pile up fast. |
@@ -50,7 +51,9 @@ When an override loosens a safety gate — merging majors, merging with red or p
 checks, using `--admin` to bypass branch protection — say plainly what will be merged and
 get a yes before doing it. The user asking for the loosened behaviour is the reason to
 offer it, not a reason to skip the confirmation, because these are exactly the merges that
-are expensive to discover after the fact.
+are expensive to discover after the fact. Similarly, approving a workflow that requires
+approval (`action_required`) triggers execution on GitHub Actions runners; always state
+which PR and commit triggered it and obtain user confirmation before approving.
 
 ## Workflow
 
@@ -88,7 +91,7 @@ Each row reports the bump type (`patch`/`minor`/`major`/`unknown`), check state
 (`pass`/`failing`/`pending`/`none`), GitHub's merge state, and whether the PR clears the
 default policy. Anything the default policy would skip comes with the reason attached.
 
-Three classifications need judgement rather than blind application:
+Four classifications need judgement rather than blind application:
 
 - **`unknown` bump** — usually a SHA-pinned GitHub Action, where there is no version to
   compare. It is not safe to assume minor. Skip it by default and list it for the user.
@@ -135,6 +138,18 @@ Three classifications need judgement rather than blind application:
   which of the two), let it rebuild, and read CI on the new branch. Never hand-rebase to
   close the gap.
 
+- **`action_required` checks (workflows awaiting approval)** — a workflow run was triggered
+  (typically because an automated pipeline step like a formatter, lockfile generator, or
+  migration tool committed back to the PR branch) and GitHub placed subsequent runs in
+  `action_required` (0s elapsed). This is not a test failure; the suite simply has not
+  run yet because GitHub requires maintainer approval for runs triggered by bot/action
+  commits.
+
+  Never approve workflow runs silently or automatically. Approving runs code with repository
+  permissions on GitHub Actions runners, so it requires an explicit decision from the user.
+  Identify the triggering commit and the paused workflow run(s), present them in the plan,
+  and ask for confirmation before approving (see the approval workflow section below).
+
 ### 3. Report the plan before touching anything
 
 State, in one or two lines, exactly what you are about to merge and what you are leaving
@@ -150,7 +165,9 @@ PR — number, dependency, the version range, and the verdict — under short he
 
 Then proceed — an explicit "merge all Dependabot PRs" is authorisation to merge the set
 that survives the filters. Stop for confirmation only when a gate was loosened (above), the
-plan is empty, or something looks off.
+plan is empty, or something looks off. When a PR is held back only because a workflow run
+requires approval, ask for confirmation to approve that run; you may still proceed to merge
+the unaffected eligible PRs.
 
 ### 4. Merge, one at a time
 
@@ -175,6 +192,7 @@ failures. Common ones:
 | Base branch out of date (branch protection) | Repo requires up-to-date branches | Same: report and move on |
 | `Pull request is not mergeable` on a PR the API still reports as `CLEAN` | GitHub's cached mergeability is stale — an earlier merge in this batch moved the base and the PR hasn't been re-evaluated yet | Retry once; if it fails identically, treat it as drift |
 | `Pull request is not mergeable` with pending checks | CI restarted after a base change | Offer auto-merge instead of waiting: `gh pr merge <n> --rebase --delete-branch --auto` |
+| `action_required` / workflow approval required | Pipeline commit triggered a follow-up run that paused for approval | Ask user for confirmation, then approve with `gh api` and watch to completion (see below) |
 | Review required | Branch protection wants an approval | Report it; do not self-approve or use `--admin` without being asked |
 
 ### Don't reach for `@dependabot rebase` by reflex
@@ -212,6 +230,65 @@ automatic rebases you were trying to help along.
 
 Never close a Dependabot PR to "clean up" unless the user asked for that. A closed PR tells
 Dependabot to stop offering that update, which is a decision with a long tail.
+
+### Approving workflows paused by pipeline commits
+
+When a workflow step (such as Biome Migrate, Prettier, or a lockfile generator) commits
+back to a PR branch, GitHub Actions prevents subsequent workflows from running recursively
+or without oversight. As a result, subsequent workflow runs (such as CI) are marked with
+`conclusion: action_required` and 0s elapsed time.
+
+This is not a failing test suite or broken build — the checks have simply not executed. But
+because approving code execution on GitHub Actions runners grants repository access, you
+must **never approve workflow runs automatically or silently**. Always get confirmation
+from the user first.
+
+#### Detecting runs needing approval
+
+Find the workflow runs awaiting approval for the PR:
+
+```bash
+gh run list --commit <headSha> --json databaseId,workflowName,status,conclusion
+```
+
+Or list all pending approval runs across the repository:
+
+```bash
+gh run list --json databaseId,workflowName,conclusion \
+  --jq '.[] | select(.conclusion=="action_required")'
+```
+
+Inspect the latest commit on the branch to confirm what triggered it:
+
+```bash
+gh pr view <n> --json commits --jq '.commits[-1] | {author: .authors[0].login, message: .messageHeadline}'
+```
+
+#### Confirming and approving
+
+In the plan (step 3), list any PRs awaiting approval under an "Awaiting workflow approval"
+heading. State:
+- The PR number and dependency
+- What commit triggered the paused run (e.g. `github-actions[bot]` committing `chore: run biome:migrate`)
+- Which workflow runs are waiting for approval (e.g. `CI`)
+
+Ask the user explicitly for confirmation before approving:
+> "PR #54 has a CI workflow awaiting approval triggered by commit `chore: run biome:migrate` from `github-actions[bot]`. Shall I approve this workflow run?"
+
+Once the user confirms:
+
+```bash
+gh api -X POST /repos/:owner/:repo/actions/runs/<run-id>/approve
+```
+
+Watch the run until it completes:
+
+```bash
+gh run watch <run-id>
+```
+
+If CI completes successfully, the PR now satisfies the passing checks gate and is eligible
+to be merged using the normal workflow.
 
 ### 5. Assess the majors you held back
 
@@ -322,6 +399,8 @@ Finish with a short factual summary, in the same plain grouped-bullet form as th
 - Needs another pass: PRs that hit conflicts. Say whether Dependabot will rebase them on its
   own (the usual case, so nothing is owed from the user but patience) or whether they are
   waiting on a decision from them, such as a branch that needs recreating.
+- Awaiting approval: PRs with workflow runs waiting on maintainer approval, naming the
+  triggering commit and explaining what is needed.
 - Held back: the majors, each with its assessment from step 5. Security-labelled ones go
   first and are marked as such.
 - Skipped: PRs held for any other reason (failing checks, no checks configured,

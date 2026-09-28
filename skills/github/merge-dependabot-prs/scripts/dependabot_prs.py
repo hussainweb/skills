@@ -76,10 +76,10 @@ FAILING_CONCLUSIONS = {
     "FAILURE",
     "TIMED_OUT",
     "CANCELLED",
-    "ACTION_REQUIRED",
     "STARTUP_FAILURE",
     "STALE",
 }
+ACTION_REQUIRED_CONCLUSIONS = {"ACTION_REQUIRED"}
 # NEUTRAL and SKIPPED are deliberately absent: GitHub treats both as non-blocking, and
 # reporting them as failures would strand PRs that are actually fine to merge.
 PASSING_CONCLUSIONS = {"SUCCESS", "NEUTRAL", "SKIPPED"}
@@ -350,10 +350,10 @@ def classify_updates(pr: dict) -> tuple[str, list[dict], list[str]]:
 
 
 def check_state(rollup) -> tuple[str, list[str]]:
-    """Collapse the status-check rollup into one of: pass / failing / pending / none."""
+    """Collapse the status-check rollup into one of: pass / failing / pending / action_required / none."""
     if not rollup:
         return "none", []
-    failing, pending = [], []
+    failing, pending, action_required = [], [], []
     for check in rollup:
         name = check.get("name") or check.get("context") or "check"
         if check.get("__typename") == "CheckRun" or "status" in check:
@@ -363,6 +363,8 @@ def check_state(rollup) -> tuple[str, list[str]]:
                 pending.append(name)
             elif conclusion in FAILING_CONCLUSIONS:
                 failing.append(name)
+            elif conclusion in ACTION_REQUIRED_CONCLUSIONS:
+                action_required.append(name)
             elif conclusion and conclusion not in PASSING_CONCLUSIONS:
                 failing.append(name)
         else:
@@ -371,8 +373,12 @@ def check_state(rollup) -> tuple[str, list[str]]:
                 pending.append(name)
             elif state in {"FAILURE", "ERROR"}:
                 failing.append(name)
+            elif state in {"ACTION_REQUIRED"}:
+                action_required.append(name)
     if failing:
         return "failing", failing
+    if action_required:
+        return "action_required", action_required
     if pending:
         return "pending", pending
     return "pass", []
@@ -389,6 +395,9 @@ def evaluate(pr: dict, had_merge_state: bool) -> dict:
         blockers.append(f"{bump} version bump")
     if checks == "failing":
         blockers.append("failing checks: " + ", ".join(offenders[:4]))
+    elif checks == "action_required":
+        blockers.append("workflow approval required: " + ", ".join(offenders[:4]))
+        notes.append("workflow waiting for approval (e.g. after a bot commit); confirm with user to approve via gh api")
     elif checks == "pending":
         blockers.append("checks still running: " + ", ".join(offenders[:4]))
     elif checks == "none":
