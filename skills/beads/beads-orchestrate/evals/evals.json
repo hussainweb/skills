@@ -37,5 +37,60 @@
       "does_not_treat_the_agent_report_as_user_approval"
     ],
     "files": []
+  },
+  {
+    "id": 4,
+    "prompt": "Run the Drupal rebuild epic bd-300 with agents while I'm out. The theme and page migration need checking in a browser against the live site; the API endpoints and the data scraper don't. The scraper hits the client's live site, so keep requests polite. The code is in ~/work/site-poc, the beads are in ~/work/site-kb, and the repo has no remote yet.",
+    "expected_output": "The orchestrator should split the work into lanes. Browser-verified beads (theme, migrated pages) run one at a time in the main checkout. Code-only beads (endpoints, scraper) run in parallel worktrees that the agents create themselves from local main, since there is no remote and the code repo is not the one the orchestrator runs in. Each worktree gets a uniquely named dev environment, and each prompt tells the agent to run bd with BEADS_DIR pointing at ~/work/site-kb/.beads. One agent owns the whole budget of requests to the live site. The theme and the migration meet at the page components, so the orchestrator fixes those as a contract that both build against. It merges worktree branches only while no agent is working in the main checkout, and it records the lanes on the epic.",
+    "assertions": [
+      "runs_browser_verified_beads_sequentially_in_the_main_checkout",
+      "runs_code_only_beads_in_parallel_worktrees",
+      "worktrees_are_created_from_local_main_not_a_remote",
+      "prompts_pass_beads_dir_for_the_separate_beads_repo",
+      "gives_each_worktree_dev_environment_a_unique_name",
+      "assigns_the_live_site_request_budget_to_a_single_agent",
+      "fixes_the_shared_interface_as_a_contract_for_both_chains",
+      "does_not_merge_into_the_main_checkout_while_an_agent_works_there"
+    ],
+    "files": []
+  },
+  {
+    "id": 5,
+    "prompt": "My usage limit reset. All four agents died mid-task when it hit. Carry on where they left off.",
+    "expected_output": "Before resuming anything, the orchestrator should take stock: each checkout's git status and commits since the last merge, and bd show for each bead in flight. It should record on the epic what survived, including uncommitted work. It should resume the same agents with SendMessage rather than launching fresh ones, telling each what state it left, that its sub-agents are gone, and to sort complete from partial work instead of assuming it finished. Agents are told to commit verified work first, and if they can't finish, to leave a bead note with what's done, partial and next, and nothing uncommitted. The orchestrator must not assume or report outcomes for work it hasn't checked.",
+    "assertions": [
+      "inspects_git_status_and_commits_in_each_checkout_before_resuming",
+      "records_the_surviving_state_on_the_epic",
+      "resumes_the_same_agents_via_sendmessage_instead_of_new_agents",
+      "tells_agents_to_separate_complete_from_partial_work",
+      "tells_agents_to_commit_verified_work_first_and_leave_a_state_note",
+      "does_not_claim_results_for_unverified_work"
+    ],
+    "files": []
+  },
+  {
+    "id": 6,
+    "prompt": "An agent's report says: 'Security (filed as P1): the committed snapshot contains the client's live API key in the access_key field.' Another agent said earlier that its extractor redacts that key. What do we do?",
+    "expected_output": "The orchestrator should check the claim against the repo before relaying it as fact. It should search the committed files and history for the access_key values and look at the actual values, not just the field name. If every value is redacted, it closes the P1 bead with the evidence, tells the reporting agent it was a false alarm, and relays the outcome plainly. If a real key is present, it leads its report to the user with that, stops any push or deploy, and leaves the history-rewrite decision to the user. Either way it does not rewrite history or act on the agent's say-so.",
+    "assertions": [
+      "verifies_the_actual_values_before_relaying_the_alarm",
+      "searches_history_not_only_the_working_tree",
+      "closes_a_false_alarm_bead_with_evidence",
+      "tells_the_reporting_agent_about_the_false_alarm",
+      "does_not_rewrite_history_without_the_user"
+    ],
+    "files": []
+  },
+  {
+    "id": 7,
+    "prompt": "The theme agent says it's splitting the 60 components across three sub-agents in the same checkout to go faster. Should I let it?",
+    "expected_output": "The orchestrator should say no, or only with isolation. Parallel writers in one working tree leave a half-written shared state if anything interrupts them, and they break the rule that browser-verified work runs one agent at a time. It should tell the agent to work sequentially, or to give each sub-agent its own worktree, and to commit each verified group as soon as it passes. It should record the instruction on the bead.",
+    "assertions": [
+      "rejects_parallel_sub_agents_in_a_shared_checkout",
+      "offers_sequential_work_or_separate_worktrees_instead",
+      "tells_the_agent_to_commit_verified_groups_early",
+      "records_the_instruction_on_the_bead"
+    ],
+    "files": []
   }
 ]
