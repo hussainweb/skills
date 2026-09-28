@@ -17,8 +17,9 @@ Every wrong answer in the episode this file is drawn from came from reasoning ab
 | Symptom | One-command check | Most likely cause |
 | --- | --- | --- |
 | `503 no available server` | Count `traefik.*` labels on the container (§2.1) | **0 labels → the resource has no domain set.** No domain, no router |
-| `503`, but 11+ labels present | Count the image's exposed ports (§2.2) | More than one exposed port and no `loadbalancer.server.port` → Traefik cannot infer which |
+| `503`, but 11+ labels present | Count the image's exposed ports (§2.2) | More than one exposed port and no `loadbalancer.server.port` → Traefik routes to the **lowest-numbered** one, which may be the wrong one (§2.2) |
 | `404` on HTTP, `503` on HTTPS | As above | A router exists for HTTPS only; same problem |
+| Deploy reports the container unhealthy, but `docker inspect` says healthy | `docker inspect coolify --format '{{.Config.Image}}'` on the control plane | **Running 4.3.22.** Saved command output is untrimmed, so `"healthy"\n` matches neither branch of the health-check loop. Upgrade to 4.3.23 |
 | Compose service routes to the wrong port after upgrading | Read the service's own `ports:`/exposed ports, then `domain_port_overrides` | 4.3.16/4.3.18 made Compose labels use **each service's** ports with the application port only as a fallback; a service domain with no explicit port no longer inherits the application's |
 | Intermittent HTTPS failures, works on retry | `grep -n 'networks:' docker-compose.yml` | A custom `networks:` block puts containers on two networks; Traefik picks non-deterministically |
 | TLS presents `CN=TRAEFIK DEFAULT CERT` | `openssl s_client -connect host:443 -servername host` | Traefik was asked for that SNI and has no certificate. Usually a consequence of having no working router, not a separate ACME fault |
@@ -68,7 +69,20 @@ docker inspect <image-or-container> \
   --format '{{range $p,$v := .Config.ExposedPorts}}{{$p}} {{end}}'
 ```
 
-Typical Coolify apps expose exactly one. Some PHP base images expose four — `80/tcp 443/tcp 443/udp 2019/tcp`, the last being Caddy's admin API — which is enough for Traefik's single-port inference to have nothing to infer from. `expose:` in the compose file cannot *reduce* this and is inert when the image already declares the port.
+Typical Coolify apps expose exactly one. Some PHP base images expose four — `80/tcp 443/tcp 443/udp 2019/tcp`, the last being Caddy's admin API. `expose:` in the compose file cannot *reduce* this and is inert when the image already declares the port.
+
+**Traefik is not confused by multiple ports — it picks the lowest.** From `getPort` in `pkg/provider/docker/shared.go` (v3.7): an explicit `loadbalancer.server.port` wins; otherwise the exposed ports are sorted numerically and `ports[0]` is used. It is deterministic, and it neither errors nor picks at random.
+
+```go
+slices.SortFunc(ports, func(a, b networktypes.Port) int {
+    return cmp.Compare(a.Num(), b.Num())
+})
+return ports[0].Port()
+```
+
+So the four-port PHP image resolves to **80**, which is the correct port — which is why those apps work. The real failure mode is not "cannot infer" but "infers the lowest, and the lowest is wrong" — an image exposing, say, `2019` and `8080` would route to the admin API. Traefik's docs say you *must* specify a port for multi-port containers; that is advice, not enforcement.
+
+(Note the field: Traefik reads `NetworkSettings.Ports`; the command above reads `Config.ExposedPorts`. They usually agree, but check both if a result surprises you.)
 
 ### 2.3 Compare against a known-good resource on the same host
 
@@ -150,7 +164,7 @@ One `503 no available server`. Five explanations were produced and acted on befo
 | Theory | Killed by |
 | --- | --- |
 | The health check rejected the empty-database 302, so the container was unhealthy and Traefik dropped it | The container reported **healthy** throughout the 503 |
-| `SERVICE_FQDN_<SVC>_<PORT>` suppressed the `loadbalancer.server.port` label, and Traefik cannot infer a port from four | No port label is generated **either way**, and a working app on the host has none either. (Observed on 4.1.x. From 4.3.15 the label *is* generated whenever a port resolves, including from `domain_port_overrides` — so re-run this check rather than reusing the conclusion.) |
+| `SERVICE_FQDN_<SVC>_<PORT>` suppressed the `loadbalancer.server.port` label, and Traefik cannot infer a port from four | No port label is generated **either way**, and a working app on the host has none either. (Observed on 4.1.x. From 4.3.15 the label *is* generated whenever a port resolves, including from `domain_port_overrides` — so re-run this check rather than reusing the conclusion.) The premise was also wrong: Traefik infers deterministically from four ports, taking the lowest — §2.2. |
 | `coolify-proxy` was not attached to the resource's network | It was, and it could reach the container on `:80` directly — it got the app's 401 |
 | `applications.custom_labels` was empty in Coolify's database | **Nine of ten** applications on that host had it empty and worked; it holds user-added labels only |
 | `docker_compose_raw` was stale relative to git | Bad test — it was grepped for a string appearing only in a **comment**, and Coolify strips comments |
@@ -164,7 +178,7 @@ The one command that would have ended it in seconds is §2.1 — count the Traef
 Recorded so they are not silently re-derived as facts:
 
 - **Why can a domain empty itself?** Observed once on a resource where it had previously been set and working. The only plausible link was that `SERVICE_FQDN_<SVC>_<PORT>` had just been removed from the compose file. Testable: remove it from a working resource, redeploy several times, see whether the domain survives. **Bounded to ≤ 4.3.16** — 4.3.17 changed the regeneration guard from "is the domain value null?" to "does a key exist for this service?" (`hasComposeServiceDomainEntry`), so any retest must run on current and the old result cannot be carried forward.
-- **How does Traefik resolve the port** for a container exposing four, given no `server.port` label and no `--providers.docker.network` constraint? Candidates: lowest-numbered exposed port, or Coolify supplying it by a route not visible in the labels. The Traefik API is not exposed, so this could not be answered from the host. Still open for the no-port case; note that from 4.3.15 a configured port *does* produce an explicit label, so the ambiguity now only arises when no port is set anywhere.
-- **What authenticated private registry pulls before 4.3.19?** The helper's docker-config mount has been conditional on the SSH user's `~/.docker/config.json` existing since at least 4.1.2 — verified identical at v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22 — yet private pulls demonstrably succeeded before the upgrade. 4.3.19 only moved the pull earlier (`361d5a3c8`). So either the earlier pull ran through a path that reached credentials another way, or those deploys were not pulling a private image at all. Not established; do not assert a mechanism without testing one.
-- **Does Coolify fail a deploy on an unhealthy container?** It surfaces health prominently; whether it gates is untested.
+- ~~**How does Traefik resolve the port** for a container exposing four, given no `server.port` label?~~ **Answered** from Traefik's source rather than from the host: `getPort` in `pkg/provider/docker/shared.go` sorts the exposed ports numerically and returns the lowest. Deterministic. See §2.2.
+- **What authenticated private registry pulls before 4.3.19?** Narrowed, not closed. 4.3.19 did not only move the pull — it introduced `docker compose ... pull --ignore-buildable`, which pulls unconditionally, where previously the only pull was whatever `docker compose up -d` did, and `up` pulls only when the image is missing locally and tolerates a failed pull when a usable local image exists. The leading explanation is therefore that the anonymous pull was **already failing before 4.3.19, silently**, with the server continuing to run a stale local image. Confirming it: on a server with no `~/.docker/config.json` for the SSH user and the private image already present, run both forms by hand and compare exit codes. See `01-architecture-and-versions.md` §3.
+- ~~**Does Coolify fail a deploy on an unhealthy container?**~~ **Answered by observation: no.** A deployment was reported as passed while the application itself was failing — an unhealthy container does not gate the deploy. Treat a green deployment as "the containers started", never as "the application works", and check health separately (§2.6).
 - **Do post-deployment commands and scheduled tasks behave as documented, and what happens on failure?** Untested.

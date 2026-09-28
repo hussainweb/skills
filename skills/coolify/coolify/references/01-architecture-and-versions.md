@@ -13,7 +13,8 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.3.2 | 13 Aug 2026 | Stable at first writing |
 | 4.3.15 | 3 Sep 2026 | **Behaviour change:** domain ports moved out of `fqdn` into `domain_port_overrides`; restart limits introduced with a default of 10 |
 | 4.3.19 | 10 Sep 2026 | **Behaviour change:** Sentinel mandatory on regular servers; compose images pulled *before* the old containers stop |
-| 4.3.22 | 18 Sep 2026 | **Breaking:** host-path persistent volumes removed from UI and API |
+| 4.3.22 | 18 Sep 2026 | **Breaking:** host-path persistent volumes removed from UI and API. **Do not run this version** — see below |
+| 4.3.23 | 18 Sep 2026 | Fixes the 4.3.22 health-check regression, 96 minutes later |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -125,6 +126,27 @@ Before 4.3.15 these were computed by calling `getHost()` on the entire comma-sep
 
 Separately, and still true: on `compose_parsing_version` 1 or 2 the two variables are **swapped** relative to 3+ — the legacy path puts the bare host in `COOLIFY_URL` and the scheme-qualified URL in `COOLIFY_FQDN`. Pinned by test, so do not expect it to be quietly corrected.
 
+### 4.3.22 only — a healthy container fails its own deployment
+
+**Skip 4.3.22.** It was Latest for 96 minutes before 4.3.23 replaced it, so few instances will have caught it, but the failure is severe and its signature is confusing.
+
+4.3.22 removed the `->trim()` from where `ExecuteRemoteCommand` stores saved command output, to stop whitespace loss corrupting generated Dockerfiles:
+
+```php
+// ≤ 4.3.21 and 4.3.23+
+$this->saved_outputs->put($this->save, str($output)->trim());
+// 4.3.22
+$this->saved_outputs->put($this->save, str($output));
+```
+
+Every consumer comparing a saved output by string equality broke. The deployment health check asks `docker inspect --format='{{json .State.Health.Status}}'`, which answers `"healthy"\n`; untrimmed, `replace('"','')` yields `healthy\n`, which matches neither the `'healthy'` nor the `'unhealthy'` branch. The wait loop therefore runs every `health_check_retries` attempt with the full `health_check_interval` between them, exits with `newVersionIsHealthy` still false, and the deploy is treated as unhealthy — while the container is, in fact, healthy.
+
+Same mechanism broke Nixpacks type detection, the commit message recorded against a deployment, and the `stat -c '%F'` check that decides whether a file-storage mount is a directory or a file.
+
+4.3.23 restores the trim on the non-append store path and adds a `trimmedSavedOutput()` helper at the read sites. The **append** path stays untrimmed — that is the case the original change actually needed, accumulating multi-chunk output.
+
+Only resources whose health check Coolify waits on are affected, which for Compose resources is most of them (§7 of `02-docker-compose.md`: they inherit the image's `HEALTHCHECK`).
+
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 
 **The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged. (The `private string $serverUserHomeDir = '/root'` default is immediately overwritten on the line that runs and has never been the operative value.)
@@ -146,7 +168,17 @@ Symptom, unchanged and still the thing to recognise: a server where someone ran 
 
 Fix: `docker login` as the SSH user (no `sudo`), or copy root's config into that user's home, owned by the user, mode 600. Then redeploy. Full detail and the diagnostic path in `07-github-actions-deployment.md` §2 and `08-troubleshooting.md` §2.4.
 
-**Open:** if the config mount has been conditional since at least 4.1.2, what authenticated the pull before 4.3.19? Not established. Candidates: the pull previously ran through a path that reached the daemon's own credentials, or those deploys were never actually pulling a private image. Recorded in §4 of `08-troubleshooting.md` rather than guessed at.
+**Why it worked before — leading explanation, not yet confirmed.** 4.3.19 did not merely move the pull, it changed *which command pulls*. The new step runs
+
+```
+docker compose ... pull --ignore-buildable
+```
+
+which pulls **every image-based service unconditionally**. Previously the only pull was whatever `docker compose up -d` did on its own, and `up` pulls an image **only when it is missing locally** — and, when a pull fails but a usable local image exists, warns and carries on rather than exiting non-zero. `docker compose pull` has no such fallback.
+
+That fits every observed symptom: the anonymous pull was very likely failing *before* 4.3.19 too, silently, with the server quietly continuing to run whatever image it already had. What changed is that the failure became fatal and visible. It also explains why `pull_policy: always` matters more than it looks — see `02-docker-compose.md` §8B.
+
+Confirming it takes one test: on a server with no `~/.docker/config.json` for the SSH user, and the private image already present locally, run the `up` and the `pull` forms by hand and compare exit codes. Until someone does that, treat it as the leading hypothesis and not a fact. Recorded in §4 of `08-troubleshooting.md`.
 
 ## 4. What Coolify actually is
 
