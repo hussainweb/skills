@@ -32,7 +32,7 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.3.x** (4.3.22 on 18 Sep 2026; 4.3.0 on 12 Aug 2026) |
+| Stable line at time of writing | **4.3.x** (4.3.23 on 18 Sep 2026; 4.3.0 on 12 Aug 2026) |
 | First stable 4.0.0 | 27 Apr 2026 |
 | State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405` |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional |

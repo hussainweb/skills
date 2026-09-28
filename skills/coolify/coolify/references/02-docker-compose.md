@@ -224,7 +224,7 @@ volumes:
   app-storage:
 ```
 
-**`pull_policy: always` is not optional in this shape.** Without it, a redeploy that finds a local image tagged `latest` will use the stale one, and the deploy will appear to succeed while shipping nothing. See `07-github-actions-deployment.md` for the registry side, including the `docker login` that must be run on the server.
+**`pull_policy: always` is not optional in this shape.** Without it, a redeploy that finds a local image tagged `latest` will use the stale one, and the deploy will appear to succeed while shipping nothing. Note that from 4.3.19 Coolify additionally runs `docker compose pull --ignore-buildable` before stopping the old containers, which pulls regardless of `pull_policy` — so a broken registry login now fails the deploy outright instead of quietly serving the stale image. That is an improvement, but it means a server that appeared to be deploying fine may simply have been reusing local images; see `01-architecture-and-versions.md` §3. See `07-github-actions-deployment.md` for the registry side, including the `docker login` that must be run on the server.
 
 ### C. Single service, compiled binary — the minimal case
 
