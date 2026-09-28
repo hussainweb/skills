@@ -20,7 +20,6 @@ Simplest and safest, because the stack's private network already isolates it. Se
 services:
   web:
     image: ghcr.io/<org>/<repo>:latest
-    pull_policy: always
     environment:
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}

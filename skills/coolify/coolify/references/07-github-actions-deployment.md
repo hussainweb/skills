@@ -41,7 +41,7 @@ Details that cause trouble:
 
   **What 4.3.19 changed is *when* the pull happens** — it moved ahead of stopping the old containers. That is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure: a server that appeared to deploy fine for weeks fails on the first deploy after the upgrade with `Error error from registry: unauthorized` on one private image and `Interrupted` on the rest, with nothing hinting at the upgrade. The silver lining of the new ordering is that the old containers are never touched, so the site stays up on the previous images.
 
-  *Open question, deliberately not guessed at:* if the config mount has been conditional since at least 4.1.2, what authenticated these pulls before 4.3.19? Not established — see `08-troubleshooting.md` §4.
+  *Open question:* if the config mount has been conditional since at least 4.1.2, what authenticated these pulls before 4.3.19? The leading explanation, unconfirmed, is that nothing did — the pull was already failing silently while the server kept running its local image. See `08-troubleshooting.md` §4.
 
   The fix is unchanged: a login for the SSH user itself, or the same config file copied into that user's home, owned by that user with mode 600.
 - **The PAT needs `read:packages`**, nothing more, for pulling. A classic PAT works; a fine-grained token needs the package read permission on the owner.

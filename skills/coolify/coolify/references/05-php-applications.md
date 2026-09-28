@@ -125,7 +125,6 @@ A worker is a second service on the same image:
 ```yaml
 worker:
   image: ghcr.io/<org>/<repo>:latest
-  pull_policy: always
   restart: unless-stopped
   command: php artisan queue:work --tries=3 --timeout=90 --max-time=3600
   healthcheck:
