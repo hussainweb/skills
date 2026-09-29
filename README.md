@@ -72,7 +72,7 @@ Multi-agent work sessions driven by the [beads](https://github.com/gastownhall/b
 
 | Skill | Install | Description |
 |-------|---------|-------------|
-| [beads-orchestrate](./skills/beads/beads-orchestrate/SKILL.md) | `npx skills add hussainweb/skills@beads-orchestrate` | Run a multi-agent session over an epic or the ready queue — front-load the user's decisions, plan waves from dependencies and file overlap, launch self-contained agent prompts, relay reports, and close out, with beads notes as the shared memory |
+| [beads-orchestrate](./skills/beads/beads-orchestrate/SKILL.md) | `npx skills add hussainweb/skills@beads-orchestrate` | Run a multi-agent session over an epic, a list of beads, or the ready queue — front-load the user's decisions, plan waves from dependencies and file overlap, launch self-contained agent prompts, relay reports, keep going as beads unblock, and close out, with beads notes as the shared memory |
 
 ### Writing and notes
 
