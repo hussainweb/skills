@@ -1,6 +1,6 @@
 ---
 name: beads-orchestrate
-description: Run a multi-agent development session over a batch of beads (`bd`) issues, with beads as the shared memory between isolated implementation agents. Use this skill whenever the user wants to hand a set of beads, an epic, or the ready queue to agents and step away — "pick up some beads and implement them with agents", "run a session on this epic", "work through the ready beads", "I'm stepping away, keep going", "parallelise these issues". Not for working a single bead yourself, and not for filing or triaging beads without implementing them.
+description: Run a multi-agent development session over a batch of beads (`bd`) issues, with beads as the shared memory between isolated implementation agents. Use this skill whenever the user asks to start, begin, kick off, pick up, take on, implement, work through or parallelise more than one bead — two or more bead IDs (bd-41 and bd-42, site-3a9 and site-3b0), an epic and its children, "the ready beads", "everything under the auth epic", "the next few from bd ready" — even when they don't mention agents, a session, or stepping away. Also for "run a session on this epic", "hand these beads to agents", "I'm stepping away, keep going". Not for working a single bead yourself, and not for filing, triaging, listing or closing beads without implementing them.
 allowed-tools: Bash, Read, Grep, Glob, Agent, SendMessage, AskUserQuestion
 metadata:
   authors: "Hussain Abbas"
@@ -10,9 +10,10 @@ metadata:
 # Beads orchestration
 
 You are the orchestrator of a development session. The user hands you a batch of beads
-work and steps away; implementation agents do the building, and you keep the session
-moving: settle decisions up front, plan who does what, launch agents, relay what they
-report, and close out cleanly.
+work, whether they step away or stay in the room; implementation agents do the building,
+and you keep the session moving: settle decisions up front, plan who does what, launch
+agents, relay what they report, and close out cleanly. A batch is anything more than one
+bead: an epic, a list of IDs, or the ready queue.
 
 What makes this work is that **beads is the memory, not the chat**. Each agent starts
 isolated and knows only what its prompt and the beads tell it. Decisions, plans and
@@ -42,6 +43,10 @@ conversation is lost the moment it ends.
 - **Clarify, don't assume.** When an answer is ambiguous, ask one follow-up. When you fill a
   gap with your own recommendation, say so explicitly, so it is visibly your call and not
   the user's.
+- **The session ends when the scope is exhausted, not when the first wave lands.** Closing
+  a bead unblocks others, and those are part of the job. Stopping after the beads that were
+  ready at the start leaves the user coming back to a half-finished epic and a queue of
+  work that could have run while they were away.
 
 ## Phase 0 — Load context
 
@@ -50,9 +55,11 @@ conversation is lost the moment it ends.
    and the memories every session is meant to have.
 2. Read the repo's `AGENTS.md` and `CLAUDE.md` (and anything they point to). These hold the
    quality gates, commit conventions and deploy rules you will pass to agents.
-3. Read the target: `bd show <epic>` and `bd show` each child, including notes. Notes carry
-   the decisions and hand-offs from earlier sessions, and they often change what "ready"
-   means. If the user named no epic, start from `bd ready`.
+3. Read the target. For an epic, `bd show <epic>` and `bd show` each child, including
+   notes. For a list of IDs, `bd show` each one and its parent, since the parent's notes
+   often carry the decisions that govern the children. If the user named nothing, start
+   from `bd ready`. Notes carry the decisions and hand-offs from earlier sessions, and they
+   often change what "ready" means.
 
 ## Phase 1 — Front-load the questions
 
@@ -78,6 +85,20 @@ Record every answer on its bead **before** launching anything:
 bd note <id> "2026-09-26, decided by <user>: use a plain text column for role_id; no foreign key. Reason: roles live in code, not the DB."
 ```
 
+**Settle the scope in the same batch.** The default is to keep going: the session covers
+everything in scope that becomes ready as earlier beads close, not only what `bd ready`
+shows at the start. Scope follows from what the user named:
+
+- an epic: all of its descendants, including those blocked today;
+- the ready queue: everything that becomes ready, until it runs dry;
+- a list of IDs: those beads, plus whatever they unblock. This is the one case to confirm,
+  because the user may have meant exactly that list. Look at `bd graph` for what the named
+  beads unblock, and if there is anything, ask now, with continuing as the recommended
+  option: "bd-41 unblocks bd-46 and bd-47, which you didn't name. Carry on into them?"
+
+Ask this up front, with the other questions, so the answer is on record before the first
+wave lands and nobody is waiting on it mid-session.
+
 Tell the user early, in the same message as the questions:
 
 - what will need them later (e.g. "no browser on this host, so the UI changes ship without a
@@ -88,8 +109,10 @@ Tell the user early, in the same message as the questions:
 
 ## Phase 2 — Plan the waves
 
-Group the ready beads into waves using their dependencies (`bd dep`, `bd graph`) and the
-files they will touch.
+Group the beads into waves using their dependencies (`bd dep`, `bd graph`) and the files
+they will touch. Plan past the first wave: beads that are blocked today go into later
+waves, keyed to the bead that unblocks them. A plan that covers only what `bd ready` shows
+right now ends the session after one wave.
 
 - Independent beads in different areas run **in parallel**, one agent each.
 - Beads that touch the same area — the same auth code, both adding a database migration,
@@ -117,7 +140,9 @@ files they will touch.
   ```
 
 Write the plan as a note on the epic — waves, which agent owns which beads and which areas,
-and why anything is serialised. Show the user the plan in a few lines.
+and why anything is serialised. When the batch has no shared parent, the first bead of the
+batch is the session's home: the plan and the session result go there, and the other beads
+get a one-line note pointing to it. Show the user the plan in a few lines.
 
 ## Phase 3 — Launch agents
 
@@ -154,8 +179,11 @@ When an agent reports (format in `references/agent-report.md`):
    the agent.
 3. **Surface odd behaviour honestly.** If an agent bypassed a guard, skipped a gate, or did
    something outside its brief, tell the user plainly, even if the result looks fine.
-4. **Launch the next wave** as soon as its dependencies have landed. Don't wait for the whole
-   current wave if the next bead only needed one of them.
+4. **Re-check the queue and launch the next wave** as soon as its dependencies have landed.
+   Run `bd ready` again after every close: the plan was written before anything landed, and
+   closing a bead can unblock beads the plan didn't list, or children an agent filed along
+   the way. Anything in scope that is now ready gets planned and launched. Don't wait for
+   the whole current wave if the next bead only needed one of them.
 
 **Continue a finished agent rather than starting a new one** when its next bead is in the
 same area. SendMessage resumes it with its context intact: the repo layout, the gotchas and
@@ -180,6 +208,10 @@ correction. When the user changes their mind, update the bead's note to say what
 when, and tell every affected agent.
 
 ## Phase 5 — Close out
+
+Close out only when nothing in scope is ready to build, or everything left needs the user
+or a decision only they can make. Say which it is. If you are unsure whether the remaining
+beads are in scope, ask rather than stopping.
 
 1. **Verify it yourself.** Main's history (signatures if the user signs, no stray
    attribution), CI on the final commit, and live health for anything deployed.
