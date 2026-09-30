@@ -62,23 +62,77 @@ chmod 700 .beads
 `.beads/.gitignore` carries bd's note not to add negation patterns; these are all positive
 patterns, so that is respected. Do not edit anything else in the files bd wrote.
 
-## A4. Amend the init commit
+## A4. Rewrite AGENTS.md and CLAUDE.md
+
+Init writes a long beads section into both files (a command cheat sheet, shell tips about
+non-interactive flags, context profiles, a session-close protocol) and, for a fresh
+AGENTS.md, a second block from the Codex setup. Almost all of it repeats what `bd prime`
+prints at session start and what the `beads` skill init installs at
+`.agents/skills/beads/SKILL.md` already says. The author wants both files reduced to a short
+pointer at that skill, so agents read one thing and it is the thing bd keeps current.
+
+The replacement text is `assets/agents-section.md` in this skill. What to do with it depends
+on whether init created the file or appended to one that already existed:
 
 ```bash
-git add .beads/.gitignore .beads/config.yaml .gitignore
+git show --name-status --format= HEAD | grep -E 'AGENTS.md|CLAUDE.md'   # A = init created it, M = init appended
+```
+
+- **Created by init (`A`):** everything in it is init's boilerplate. Replace the whole file
+  with the asset.
+
+  ```bash
+  cp <skill-dir>/assets/agents-section.md AGENTS.md
+  cp <skill-dir>/assets/agents-section.md CLAUDE.md
+  ```
+
+- **Appended to by init (`M`):** the rest of the file is the user's. Remove only the two
+  marked blocks, trim the blank lines they leave at the end, and append the asset:
+
+  ```bash
+  for f in AGENTS.md CLAUDE.md; do
+    sed -i -e '/<!-- BEGIN BEADS INTEGRATION/,/<!-- END BEADS INTEGRATION -->/d' \
+           -e '/<!-- BEGIN BEADS CODEX SETUP/,/<!-- END BEADS CODEX SETUP -->/d' "$f"
+    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$f"      # drop trailing blank lines
+    printf '\n' >> "$f"
+    cat <skill-dir>/assets/agents-section.md >> "$f"
+  done
+  git diff HEAD~1 -- AGENTS.md CLAUDE.md                # expect: only the appended section
+  ```
+
+  If a file already had a beads section of the user's own before init, leave that alone and
+  ask whether they want the pointer as well.
+
+Two consequences to know about, neither needing action:
+
+- The pointer carries no `<!-- BEGIN BEADS ... -->` marker on purpose. With a marker, bd
+  treats the block as its own and a later `bd setup claude` or `bd setup codex` would
+  "upgrade" it back to the long version. Without one, `bd setup <tool> --check` reports
+  "no beads section found", which is accurate and harmless; nothing runs those checks on its
+  own.
+- If init ran with `--skip-agents`, there are no files to rewrite and no installed skill to
+  point at, so skip this step.
+
+`.cursor/rules/beads.mdc` carries the same long text for Cursor. It is not part of this
+request; leave it unless the user asks.
+
+## A5. Amend the init commit
+
+```bash
+git add .beads/.gitignore .beads/config.yaml .gitignore AGENTS.md CLAUDE.md
 git commit --amend --no-edit
 ```
 
 The beads hooks run on the amend (`prepare-commit-msg`, `pre-commit`) and add nothing to the
-message. Confirm there is still one init commit on top of the earlier HEAD, and that the three
+message. Confirm there is still one init commit on top of the earlier HEAD, and that the edited
 files are in it:
 
 ```bash
 git log --oneline -3
-git show --stat --format= HEAD | grep -E 'gitignore|config.yaml'
+git show --stat --format= HEAD | grep -E 'gitignore|config.yaml|AGENTS|CLAUDE'
 ```
 
-## A5. Verify
+## A6. Verify
 
 ```bash
 bd config get export.auto                           # false
