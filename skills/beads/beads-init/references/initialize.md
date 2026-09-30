@@ -21,10 +21,19 @@ report. If the user has said they don't want the editor integrations (CLAUDE.md,
 `.codex/`, `.cursor/`, `.agents/`), add `--skip-agents`; otherwise leave them, since the
 request is "the way init does it, with my settings".
 
+Settle the role. Maintainer is the default and the right answer for the user's own repos,
+but a fork of someone else's project wants `contributor`, which changes how `bd prime`
+frames commits and pushes and is what bd's contributor setup assumes. The two look the same
+from inside the directory, so ask rather than guess: one question, maintainer first and
+marked as the default, contributor as the alternative, unless the user has already said which
+this is (a fork, "I'm contributing to X", an `upstream` remote is a strong hint to at least
+ask). Where AskUserQuestion is unavailable, use maintainer and say so in the report. The
+role is per clone (it lives in `.git/config`), so this only decides the machine you are on.
+
 ## A2. Run init
 
 ```bash
-bd init --non-interactive --role maintainer -p <prefix>
+bd init --non-interactive --role <maintainer|contributor> -p <prefix>
 git log -1 --format=%s            # expect: bd init: initialize beads issue tracking
 git show --stat --format= HEAD    # what it committed
 git status --porcelain            # expect: unchanged from A1
@@ -46,7 +55,7 @@ git check-ignore -q .beads/issues.jsonl || printf '\n# JSONL exports (issues, ev
 git check-ignore -q .beads.gate.lock     || printf '*.gate.lock*\n' >> .gitignore
 git check-ignore -q .beads/dolt.gate.lock || printf '*.gate.lock*\n' >> .beads/.gitignore
 
-[ "$(git config beads.role)" = maintainer ] || git config beads.role maintainer
+[ "$(git config beads.role)" = <role> ] || git config beads.role <role>   # the role settled in A1
 chmod 700 .beads
 ```
 
@@ -74,7 +83,7 @@ git show --stat --format= HEAD | grep -E 'gitignore|config.yaml'
 ```bash
 bd config get export.auto                           # false
 git check-ignore -v .beads/issues.jsonl .beads/events.jsonl .beads.gate.lock .beads/dolt.gate.lock
-git config beads.role                               # maintainer
+git config beads.role                               # the role settled in A1
 stat -c %a .beads                                   # 700
 bd ready                                            # runs; no "beads.role" or permissions warning
 ```

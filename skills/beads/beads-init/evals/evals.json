@@ -2,10 +2,10 @@
   {
     "id": 1,
     "prompt": "Initialize beads in this repo.",
-    "expected_output": "The agent confirms there is no .beads/ yet, records git status and HEAD, and runs `bd init --non-interactive --role maintainer` with a prefix (the directory name, or one the user chose). It then sets `export.auto false` via `bd config set`, adds `*.jsonl` to `.beads/.gitignore` and `*.gate.lock*` wherever `git check-ignore` shows it missing, sets `git config beads.role maintainer`, stages only `.beads/.gitignore`, `.beads/config.yaml` and `.gitignore`, and amends bd's own init commit so a single init commit remains. It verifies with `bd config get`, `git check-ignore -v`, `git config beads.role` and `bd ready`, does not push, and reports using the template.",
+    "expected_output": "The agent confirms there is no .beads/ yet, records git status and HEAD, and asks whether the user is the maintainer or a contributor with maintainer as the default, then runs `bd init --non-interactive --role <role>` with a prefix (the directory name, or one the user chose). It then sets `export.auto false` via `bd config set`, adds `*.jsonl` to `.beads/.gitignore` and `*.gate.lock*` wherever `git check-ignore` shows it missing, sets `git config beads.role maintainer`, stages only `.beads/.gitignore`, `.beads/config.yaml` and `.gitignore`, and amends bd's own init commit so a single init commit remains. It verifies with `bd config get`, `git check-ignore -v`, `git config beads.role` and `bd ready`, does not push, and reports using the template.",
     "assertions": [
       "checks_that_no_beads_directory_exists_before_running_init",
-      "runs_bd_init_non_interactive_with_role_maintainer",
+      "asks_maintainer_or_contributor_with_maintainer_as_default_then_runs_bd_init_with_that_role",
       "sets_export_auto_false_with_bd_config_set",
       "adds_jsonl_ignore_to_beads_gitignore_and_checks_gate_lock_with_git_check_ignore",
       "stages_only_the_three_edited_files_never_git_add_dash_a",
@@ -24,7 +24,7 @@
       "snapshots_git_status_before_bootstrap_and_compares_after",
       "sets_beads_directory_mode_700",
       "runs_bootstrap_dry_run_before_bootstrap_yes",
-      "sets_git_config_beads_role_maintainer_on_the_clone",
+      "sets_git_config_beads_role_maintainer_on_the_clone_without_asking",
       "reverts_a_sync_remote_change_to_config_yaml_and_explains_why_nothing_is_lost",
       "verifies_with_bd_ready_and_no_warnings"
     ],
