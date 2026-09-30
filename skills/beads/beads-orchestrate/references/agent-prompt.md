@@ -16,10 +16,11 @@ The sections below are in the order the agent needs them.
 
 ## 2. Load context before touching code
 
-Do not tell the agent to run `bd prime`. Its output runs to ~14k tokens, mostly workflow
-rules every agent gets the same and memories about areas this agent will never touch, and it
-then sits in the agent's context for every request it makes. Give the agent the parts that
-apply instead: the cheat-sheet below, verbatim, and the memories you selected (Phase 3).
+Do not tell the agent to run `bd prime`. Its output runs to 20k tokens or more (22k measured,
+with 37 memories), mostly workflow rules every agent gets the same and memories about areas
+this agent will never touch, and it then sits in the agent's context for every request it
+makes. Give the agent the parts that apply instead: the cheat-sheet below, verbatim, and the
+memories you selected (Phase 3).
 
 > 1. Read `AGENTS.md` (and `CLAUDE.md`) at the repo root and follow them.
 > 2. `bd show <id>` for each bead you own, and for the decision beads `<ids>`. Read the notes;

@@ -163,8 +163,8 @@ areas other agents own, the git and deploy policy, and the report format spelled
   uncommitted name (e.g. `.ddev/config.local.yaml`), and to stop it when done.
 - Serial chains inside one agent run in the order of their dependencies.
 - **Hand each agent the memories that apply, not `bd prime`.** You read all of `bd prime` in
-  Phase 0, and it is ~14k tokens that would otherwise sit in every agent's context for every
-  request. For each agent: take the keywords from its beads (the tools, frameworks, paths and
+  Phase 0, and it is 20k tokens or more that would otherwise sit in every agent's context for
+  every request. For each agent: take the keywords from its beads (the tools, frameworks, paths and
   deploy targets they name), run `bd memories <keyword>` for each, and paste the matches into
   the prompt verbatim, at most about eight. Paraphrasing loses the trap that made the memory
   worth saving. Always include memories on the user's standing conventions (signing,
