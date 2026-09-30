@@ -16,11 +16,28 @@ The sections below are in the order the agent needs them.
 
 ## 2. Load context before touching code
 
-> 1. Run `bd prime` and read all of it. If the output is saved to a file, read the file.
-> 2. Read `AGENTS.md` (and `CLAUDE.md`) at the repo root and follow them.
-> 3. `bd show <id>` for each bead you own, and for the decision beads `<ids>`. Read the notes;
+Do not tell the agent to run `bd prime`. Its output runs to ~14k tokens, mostly workflow
+rules every agent gets the same and memories about areas this agent will never touch, and it
+then sits in the agent's context for every request it makes. Give the agent the parts that
+apply instead: the cheat-sheet below, verbatim, and the memories you selected (Phase 3).
+
+> 1. Read `AGENTS.md` (and `CLAUDE.md`) at the repo root and follow them.
+> 2. `bd show <id>` for each bead you own, and for the decision beads `<ids>`. Read the notes;
 >    they hold decisions and hand-offs from earlier work.
-> 4. `bd update <id> --claim` for each bead as you start it, not all at once.
+> 3. `bd update <id> --claim` for each bead as you start it, not all at once.
+>
+> **bd, in brief.** `bd show <id>` reads a bead; `bd note <id> "<text>"` appends a note (never
+> replace the notes field); `bd close <id> --reason "<what shipped, commits>"` closes;
+> `bd create "<title>" --deps discovered-from:<id>` files a follow-up; `bd remember` is only
+> for facts every future session needs. `bd memories <keyword>` searches the project's saved
+> memories, and returns only the matches.
+>
+> **Memories that apply to this work.** The orchestrator chose these from the project's
+> memories for your beads. They are verbatim; treat them as rules.
+> `<each selected memory: its key, then its text>`
+>
+> You were not given every memory. When you meet a tool, path or behaviour you were not
+> briefed on and it might have a trap, run `bd memories <keyword>` before guessing.
 
 ## 3. Binding decisions
 
@@ -122,8 +139,10 @@ State preconditions for risky pushes explicitly, with the fallback:
 > You are implementing `app-41` then `app-42` in `~/work/app`. Together they move permission
 > checks into a shared package so the portal and the site runtime use one catalog.
 >
-> Load context: run `bd prime` and read all of it; read AGENTS.md; `bd show app-41 app-42
-> app-38` (app-38 holds the decisions). Claim each bead as you start it.
+> Load context: read AGENTS.md; `bd show app-41 app-42 app-38` (app-38 holds the
+> decisions). Claim each bead as you start it. [bd cheat-sheet as above.] Memories that
+> apply: `migrations-number-collision` (take the next migration number from main, never from
+> your worktree), `npm-ci-not-install` (use `npm ci`; `npm install` rewrites the lockfile).
 >
 > Decided (app-38, by hw, 2026-09-26): roles are defined in code; the DB stores the role ID
 > as plain text with no foreign key. Don't reintroduce the roles table.
