@@ -2,13 +2,14 @@
   {
     "id": 1,
     "prompt": "Initialize beads in this repo.",
-    "expected_output": "The agent confirms there is no .beads/ yet, records git status and HEAD, and asks whether the user is the maintainer or a contributor with maintainer as the default, then runs `bd init --non-interactive --role <role>` with a prefix (the directory name, or one the user chose). It then sets `export.auto false` via `bd config set`, adds `*.jsonl` to `.beads/.gitignore` and `*.gate.lock*` wherever `git check-ignore` shows it missing, sets `git config beads.role maintainer`, stages only `.beads/.gitignore`, `.beads/config.yaml` and `.gitignore`, and amends bd's own init commit so a single init commit remains. It verifies with `bd config get`, `git check-ignore -v`, `git config beads.role` and `bd ready`, does not push, and reports using the template.",
+    "expected_output": "The agent confirms there is no .beads/ yet, records git status and HEAD, and asks whether the user is the maintainer or a contributor with maintainer as the default, then runs `bd init --non-interactive --role <role>` with a prefix (the directory name, or one the user chose). It then sets `export.auto false` via `bd config set`, adds `*.jsonl` to `.beads/.gitignore` and `*.gate.lock*` wherever `git check-ignore` shows it missing, sets `git config beads.role maintainer`, replaces the AGENTS.md and CLAUDE.md init created with the short pointer from `assets/agents-section.md` (no marker comment), stages only the edited files by path, and amends bd's own init commit so a single init commit remains. It verifies with `bd config get`, `git check-ignore -v`, `git config beads.role` and `bd ready`, does not push, and reports using the template.",
     "assertions": [
       "checks_that_no_beads_directory_exists_before_running_init",
       "asks_maintainer_or_contributor_with_maintainer_as_default_then_runs_bd_init_with_that_role",
       "sets_export_auto_false_with_bd_config_set",
       "adds_jsonl_ignore_to_beads_gitignore_and_checks_gate_lock_with_git_check_ignore",
-      "stages_only_the_three_edited_files_never_git_add_dash_a",
+      "replaces_init_created_agents_md_and_claude_md_with_the_pointer_asset_without_a_beads_marker",
+      "stages_only_the_edited_files_by_path_never_git_add_dash_a",
       "amends_the_init_commit_leaving_a_single_init_commit",
       "verifies_settings_and_runs_bd_ready_before_reporting",
       "does_not_push"
@@ -38,6 +39,18 @@
       "checks_the_origin_for_refs_dolt_data_before_bootstrapping",
       "stops_when_the_plan_would_create_an_empty_database_and_asks_where_the_data_is",
       "never_runs_bd_init_or_destructive_reinit_flags_on_a_clone"
+    ],
+    "files": []
+  },
+  {
+    "id": 4,
+    "prompt": "Initialize beads here. This repo already has an AGENTS.md with our coding conventions and a CLAUDE.md that points at it.",
+    "expected_output": "After `bd init` appends its marked blocks to both files, the agent sees them as modified (`M`) in the init commit, strips only the `BEGIN/END BEADS INTEGRATION` and `BEGIN/END BEADS CODEX SETUP` blocks, trims trailing blank lines, appends the pointer from `assets/agents-section.md`, and confirms with `git diff HEAD~1` that the user's conventions are untouched and the only change is the appended section. It amends those files into the init commit along with the ignore and config edits and does not touch `.cursor/rules/beads.mdc`.",
+    "assertions": [
+      "detects_modified_not_created_agents_files_from_the_init_commit",
+      "strips_only_the_marked_beads_blocks_and_keeps_the_users_content",
+      "appends_the_pointer_and_verifies_with_git_diff_against_pre_init",
+      "leaves_cursor_rules_untouched"
     ],
     "files": []
   }

@@ -1,6 +1,6 @@
 ---
 name: beads-init
-description: Set up the beads (`bd`) issue tracker with this author's settings: `bd init` with its commit amended (auto-export off, JSONL and gate-lock files gitignored, role set after asking maintainer or contributor), or `bd bootstrap` on a fresh clone with the per-clone wiring redone and bootstrap's stray edits undone. Invoked only by the user via /beads-init; never trigger this on your own, even when a repo has no `.beads/` or a clone is missing its database.
+description: Set up the beads (`bd`) issue tracker with this author's settings: `bd init` with its commit amended (auto-export off, JSONL and gate-lock files gitignored, role set after asking maintainer or contributor, AGENTS.md and CLAUDE.md cut to a pointer at the beads skill), or `bd bootstrap` on a fresh clone with the per-clone wiring redone and bootstrap's stray edits undone. Invoked only by the user via /beads-init; never trigger this on your own, even when a repo has no `.beads/` or a clone is missing its database.
 disable-model-invocation: true
 argument-hint: "[issue prefix, when initializing]"
 allowed-tools: Bash, Read, Grep, Glob, Edit, AskUserQuestion
@@ -54,6 +54,7 @@ This skill has two modes. Decide which one applies before running anything:
 | `*.jsonl` ignored inside `.beads/` | `.beads/.gitignore` (committed) | `issues.jsonl`, `events.jsonl`, `interactions.jsonl` are derived from Dolt. bd does not ignore them because bootstrap can fall back to a tracked JSONL, but with export off and Dolt data pushed to the origin that fallback is never used. |
 | `*.gate.lock*` ignored | root `.gitignore` and `.beads/.gitignore` (committed) | `.beads.gate.lock` in the root and `.beads/*.gate.lock` are runtime locks. bd 1.3.0 ignores them already; verify rather than assume, older inits did not. |
 | `beads.role` | `.git/config` (**local, never committed**) | `maintainer` by default. When initializing, ask whether this is the user's own repo or a fork they contribute to, and use `contributor` for the fork; when bootstrapping, it is always `maintainer`. bd reads the role only from git config, not from `config.yaml`, which is why a fresh clone prints `warning: beads.role not configured (GH#2950)` on every command until it is set again. |
+| AGENTS.md and CLAUDE.md are a short pointer | both files (committed) | Init writes a long beads section that repeats what `bd prime` prints and what the installed `beads` skill says. A pointer at `.agents/skills/beads/SKILL.md` keeps one source, the one bd maintains. Initialize only; text in `assets/agents-section.md`. |
 | `.beads/` mode `0700` | filesystem (local) | bd warns on every command when the directory is group-readable. Init creates it 0700; `git clone` creates it with the umask. |
 
 ## Report
@@ -73,6 +74,7 @@ bd <version>, prefix <prefix> (initialize only)
 - *.gate.lock* ignored (root and .beads/.gitignore)           | already ignored by bd
 - beads.role = <maintainer | contributor> (local git config, not committed)
 - .beads mode 700
+- AGENTS.md and CLAUDE.md reduced to the beads-skill pointer (in the commit; initialize only)
 - git hooks installed to .git/hooks (bootstrap only)
 
 ### Footprint (bootstrap only)
