@@ -28,6 +28,10 @@ a reverted deploy, a guard or gate bypassed, a security concern. "None" if none.
 
 ## Beads
 <Beads closed, hand-off notes left (on which beads), follow-ups filed (new ids).>
+
+## Memory gaps
+<Memories you had to look up with `bd memories` because your brief did not include them
+(keys), and any trap you hit that no memory covers. "None" if none.>
 ```
 
 Keep it short. The details belong in the commits and the bead notes, not the report.
@@ -48,6 +52,10 @@ Example:
 > Two commits are unsigned — signing timed out (e4f5a6b, 9c8d7e6).
 > Not verified: the role badge in the UI, since there's no browser here.
 > Nothing needed from you yet. Launching app-43 now.
+
+Read "Memory gaps" for yourself; it is not for the user. Each key listed there is a memory
+the brief should have carried, so add it to the next prompt for that area. A trap with no
+memory behind it is a candidate for `bd remember`, once you have checked it is true.
 
 Before relaying, check anything that looks off against the repo — a commit that isn't on
 the branch, a bead reported closed that `bd show` has open, CI that the report calls green

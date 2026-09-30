@@ -116,5 +116,20 @@
       "uses_the_first_bead_as_the_plan_home_when_there_is_no_epic"
     ],
     "files": []
+  },
+  {
+    "id": 10,
+    "prompt": "Two agents are ready to launch: one for bd-51 (add a CSV export endpoint to the Express API) and one for bd-52 (restyle the settings page). bd prime listed 30 memories; three are about Express middleware ordering, one is about never committing with --no-verify, two are about the Drupal migration, and the rest are about unrelated tooling. Write the agent prompts.",
+    "expected_output": "Neither prompt tells the agent to run `bd prime`. Each carries the short bd cheat-sheet and a 'Memories that apply' block copied verbatim from `bd memories` searches on keywords from that agent's own beads: the bd-51 prompt has the Express middleware memories, the bd-52 prompt does not. Both include the --no-verify convention. The Drupal and unrelated memories are left out. The prompts tell the agent it can run `bd memories <keyword>` if it meets something it was not briefed on, ask for the 'Memory gaps' section in the report, and the orchestrator notes the memory keys it passed on each bead.",
+    "assertions": [
+      "does_not_tell_agents_to_run_bd_prime",
+      "includes_the_bd_cheat_sheet",
+      "selects_memories_by_searching_with_keywords_from_the_agents_beads",
+      "pastes_selected_memories_verbatim",
+      "gives_each_agent_only_the_memories_that_apply_plus_the_standing_conventions",
+      "tells_the_agent_it_can_search_bd_memories_itself",
+      "records_the_passed_memory_keys_on_the_bead"
+    ],
+    "files": []
   }
 ]
