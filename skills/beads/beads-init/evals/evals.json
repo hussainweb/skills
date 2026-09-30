@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "prompt": "Initialize beads in this repo.",
+    "expected_output": "The agent confirms there is no .beads/ yet, records git status and HEAD, and runs `bd init --non-interactive --role maintainer` with a prefix (the directory name, or one the user chose). It then sets `export.auto false` via `bd config set`, adds `*.jsonl` to `.beads/.gitignore` and `*.gate.lock*` wherever `git check-ignore` shows it missing, sets `git config beads.role maintainer`, stages only `.beads/.gitignore`, `.beads/config.yaml` and `.gitignore`, and amends bd's own init commit so a single init commit remains. It verifies with `bd config get`, `git check-ignore -v`, `git config beads.role` and `bd ready`, does not push, and reports using the template.",
+    "assertions": [
+      "checks_that_no_beads_directory_exists_before_running_init",
+      "runs_bd_init_non_interactive_with_role_maintainer",
+      "sets_export_auto_false_with_bd_config_set",
+      "adds_jsonl_ignore_to_beads_gitignore_and_checks_gate_lock_with_git_check_ignore",
+      "stages_only_the_three_edited_files_never_git_add_dash_a",
+      "amends_the_init_commit_leaving_a_single_init_commit",
+      "verifies_settings_and_runs_bd_ready_before_reporting",
+      "does_not_push"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "I just cloned my notes repo on this laptop; it already uses beads. Get it working.",
+    "expected_output": "The agent recognises the bootstrap case (`.beads/` tracked, no database directory), does not run `bd init`, snapshots `git status --porcelain`, chmods `.beads` to 700, checks the origin for `refs/dolt/data`, shows `bd bootstrap --dry-run`, then runs `bd bootstrap --yes`. It sets `git config beads.role maintainer` and installs the git hooks, then compares the working tree to the snapshot: a `sync.remote` addition to `.beads/config.yaml` is reverted with `git checkout` and explained; nothing else is committed. It verifies with `bd ready` and reports.",
+    "assertions": [
+      "chooses_bootstrap_not_init_for_a_tracked_beads_directory_without_a_database",
+      "snapshots_git_status_before_bootstrap_and_compares_after",
+      "sets_beads_directory_mode_700",
+      "runs_bootstrap_dry_run_before_bootstrap_yes",
+      "sets_git_config_beads_role_maintainer_on_the_clone",
+      "reverts_a_sync_remote_change_to_config_yaml_and_explains_why_nothing_is_lost",
+      "verifies_with_bd_ready_and_no_warnings"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "Set up beads here — it's a fresh clone, but I don't think anyone ever pushed the Dolt data.",
+    "expected_output": "The agent checks `git ls-remote origin 'refs/dolt/*'` and `config.yaml` for `sync.remote`, finds no Dolt data on the origin, runs `bd bootstrap --dry-run` and sees a plan that would create a fresh or JSONL-imported database. It stops before `bd bootstrap --yes`, shows the plan, and asks where the data is rather than creating an empty database. It does not run `bd init`, `--reinit-local` or `--force`.",
+    "assertions": [
+      "checks_the_origin_for_refs_dolt_data_before_bootstrapping",
+      "stops_when_the_plan_would_create_an_empty_database_and_asks_where_the_data_is",
+      "never_runs_bd_init_or_destructive_reinit_flags_on_a_clone"
+    ],
+    "files": []
+  }
+]
