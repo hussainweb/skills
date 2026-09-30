@@ -1,0 +1,43 @@
+[
+  {
+    "id": 1,
+    "prompt": "/beads-trim-memories",
+    "expected_output": "The agent reads the full memory set with `bd memories --json` rather than from `bd prime`, checks whether prime caps are eliding memories, and reads AGENTS.md/CLAUDE.md. For each memory it gathers cheap evidence (grep for named files, `bd show` for named beads, docs for restated conventions), groups duplicates, and presents batches with key, content, one-line evidence and a recommended verdict, recommendation first. It applies nothing until the user answers, writes destinations before forgetting, and ends with the report template including the full text of every forgotten memory.",
+    "assertions": [
+      "reads_memories_with_bd_memories_json_not_from_prime",
+      "checks_prime_caps_and_reports_elision_if_any",
+      "gathers_evidence_per_memory_before_recommending",
+      "presents_each_memory_with_evidence_and_a_recommended_verdict_first",
+      "applies_nothing_before_the_user_answers",
+      "writes_the_destination_before_forgetting_a_moved_memory",
+      "report_includes_full_text_of_every_forgotten_memory"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "/beads-trim-memories deploy",
+    "expected_output": "The agent limits the review to memories whose key or content matches 'deploy' and says the rest were skipped. A memory that only matters for the deploy pipeline is recommended as a move to the open deploy epic (found via `bd list`/`bd search`) with a dated note carrying the memory key, not to the knowledge file, and not to a newly created bead. The report lists the unreviewed memories under 'Not reviewed'.",
+    "assertions": [
+      "reviews_only_memories_matching_the_argument_and_says_so",
+      "prefers_a_note_on_an_existing_bead_over_the_knowledge_file",
+      "does_not_create_a_new_bead_to_hold_a_memory",
+      "moved_note_is_dated_and_names_the_source_memory_key",
+      "report_lists_unreviewed_memories"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "/beads-trim-memories — one of the memories is about the office VPN being needed for staging, nothing in beads is about that, and I want to keep the memory about always running the linter even though you'll probably say it's in AGENTS.md",
+    "expected_output": "The VPN memory is recommended for the knowledge file since no bead owns the topic; on confirmation the agent creates `.beads/KNOWLEDGE.md` with a dated, keyed entry, stores the `knowledge-file` pointer memory, forgets the original, and leaves the commit to the user while saying so. The linter memory is recommended as a drop with the AGENTS.md line as evidence, but when the user says keep, it is kept without argument and the agent offers to fold the user's reason into the memory text.",
+    "assertions": [
+      "creates_knowledge_file_with_dated_keyed_entry_when_no_bead_owns_the_topic",
+      "stores_the_knowledge_file_pointer_memory_when_creating_the_file",
+      "leaves_the_knowledge_file_commit_to_the_user_and_says_so",
+      "recommends_drop_with_docs_evidence_but_keeps_on_user_choice_without_arguing",
+      "offers_to_fold_the_users_reason_into_the_kept_memory"
+    ],
+    "files": []
+  }
+]

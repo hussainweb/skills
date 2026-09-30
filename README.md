@@ -73,6 +73,7 @@ Multi-agent work sessions driven by the [beads](https://github.com/gastownhall/b
 | Skill | Install | Description |
 |-------|---------|-------------|
 | [beads-orchestrate](./skills/beads/beads-orchestrate/SKILL.md) | `npx skills add hussainweb/skills@beads-orchestrate` | Run a multi-agent session over an epic, a list of beads, or the ready queue — front-load the user's decisions, plan waves from dependencies and file overlap, launch self-contained agent prompts, relay reports, keep going as beads unblock, and close out, with beads notes as the shared memory |
+| [beads-trim-memories](./skills/beads/beads-trim-memories/SKILL.md) | `npx skills add hussainweb/skills@beads-trim-memories` | Review the persistent memories `bd prime` injects into every session — check each against the repo and the beads, recommend keep, rewrite, move or drop, apply only what the user confirms, and park occasional knowledge on the bead it concerns or in a committed knowledge file. Slash-command only, never auto-triggered |
 
 ### Writing and notes
 
