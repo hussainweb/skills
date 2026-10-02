@@ -1,6 +1,7 @@
 ---
 name: beads-init
-description: Set up the beads (`bd`) issue tracker with this author's settings: `bd init` with its commit amended (auto-export off, JSONL and gate-lock files gitignored, role set after asking maintainer or contributor, AGENTS.md and CLAUDE.md cut to a pointer at the beads skill), or `bd bootstrap` on a fresh clone with the per-clone wiring redone and bootstrap's stray edits undone. Invoked only by the user via /beads-init; never trigger this on your own, even when a repo has no `.beads/` or a clone is missing its database.
+description: >-
+  Set up the beads (`bd`) issue tracker with this author's settings: `bd init` with its commit amended (auto-export off, JSONL and gate-lock files gitignored, role set after asking maintainer or contributor, AGENTS.md and CLAUDE.md cut to a pointer at the beads skill), or `bd bootstrap` on a fresh clone with the per-clone wiring redone and bootstrap's stray edits undone. Invoked only by the user via /beads-init; never trigger this on your own, even when a repo has no `.beads/` or a clone is missing its database.
 disable-model-invocation: true
 argument-hint: "[issue prefix, when initializing]"
 allowed-tools: Bash, Read, Grep, Glob, Edit, AskUserQuestion
