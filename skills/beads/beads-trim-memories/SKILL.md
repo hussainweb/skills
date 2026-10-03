@@ -6,7 +6,7 @@ argument-hint: "[keyword to limit the review, e.g. deploy]"
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion
 metadata:
   authors: "Hussain Abbas"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Trimming beads memories
@@ -20,7 +20,14 @@ nobody comes back to ask whether they earned their place. This skill is that com
 The test for a memory that stays in prime is: **would a fresh agent, starting on an arbitrary
 bead in this repo, do something wrong without it?** If the honest answer is "only when working
 on X", the memory belongs with X, not in every session. If the answer is "no, that shipped",
-it belongs nowhere.
+it belongs nowhere. If the answer is "only if that bug happens again", the memory is doing a
+tool's job: a lint rule, test, CI check, type or script should catch it, not an agent reading
+prime.
+
+What earns a place in prime is the project's norms and direction: conventions and why they
+hold, architectural decisions and the trade-offs behind them, things deliberately ruled out,
+contracts between parts of the system that the code doesn't make obvious, and how the user
+wants sessions run. One-off bugs, gotchas and tool quirks don't, however painful they were.
 
 The user runs this deliberately, and the user decides the fate of every memory. Your job is to
 do the legwork they don't have time for (reading everything, checking each claim against the
@@ -91,6 +98,7 @@ otherwise have to look up.
 | A convention or rule | Search `AGENTS.md`, `CLAUDE.md`, `.beads/PRIME.md` | Whether the repo docs already say it |
 | A decision | `bd search <topic>`, look for ADRs in `docs/` | Whether a bead note or ADR already records it |
 | A tool, version or dependency | The lockfile, `composer.json`, `package.json`, etc. | Whether the version or tool it describes is still the one in use |
+| A bug, error, gotcha or tool quirk | Look for a lint rule, test, CI step or script that already covers it | Whether it is already enforced (drop), could recur (replace with a check), or can't recur (drop) |
 | Nothing checkable (a preference, a way of working) | Compare with other memories and the docs | Whether it duplicates or contradicts something |
 
 Also read the memories against each other. Two memories that say one thing in different
@@ -101,11 +109,12 @@ Then classify each memory:
 
 | Verdict | Meaning | Action when confirmed |
 |---|---|---|
-| **Keep** | Every session needs it: standing instructions, how the user wants sessions run, gotchas that bite anywhere in the repo | None |
+| **Keep** | Every session needs it: norms and conventions, architectural direction and decisions, cross-cutting contracts, standing instructions, how the user wants sessions run | None |
+| **Replace with a check** | A gotcha or bug that could recur and that no tool catches yet | Propose the specific check (lint rule, test, CI step, type, script). Record it as work: a note on the bead for that area, or a new task bead if the user agrees (that is real work, not a memory parked in a bead). Then `bd forget <key>` |
 | **Rewrite** | Still needed, but stale wording, too long, or several memories that should be one | `bd remember --key <key> "<new text>"`, then `bd forget` the ones merged into it |
 | **Move to a bead** | Only relevant when working on a specific epic, area or bead, and a bead for it exists | `bd note <id> "<text>"`, then `bd forget <key>` |
 | **Move to the knowledge file** | Occasionally relevant, but no existing bead owns the topic | Append to `.beads/KNOWLEDGE.md`, then `bd forget <key>` |
-| **Drop** | About finished work, superseded, contradicted by the repo, or already in the repo docs | `bd forget <key>` |
+| **Drop** | About finished work, superseded, contradicted by the repo, already in the repo docs, a bug that is already enforced or can't recur, a correction to a skill's or tool's own docs (fix it at the source; offer to), or a narrative learning (it belongs in the user's learning notes) | `bd forget <key>` |
 | **Unsure** | You found no evidence either way | Ask; default to keep |
 
 ### Where occasional knowledge goes
@@ -173,8 +182,10 @@ Apply in the order that cannot lose anything:
 1. Rewrites: `bd remember --key <key> "<text>"` updates in place.
 2. Moves: write the bead note or the knowledge file entry, confirm it landed (`bd show <id>`
    or read the file back), then `bd forget <key>`.
-3. Drops: `bd forget <key>`.
-4. If the knowledge file was created or changed, add or update the pointer memory.
+3. Replacements with a check: write the bead note or create the task bead, confirm it landed
+   (`bd show <id>`), then `bd forget <key>`.
+4. Drops: `bd forget <key>`.
+5. If the knowledge file was created or changed, add or update the pointer memory.
 
 Show each command as you run it. If the knowledge file changed, leave the git commit to the
 user unless their standing instructions or this session told you to commit; say either way.
@@ -200,6 +211,9 @@ Before: N memories, X chars in prime. After: N memories, X chars.
 
 ### Rewritten (n)
 - key — what changed
+
+### Replaced with a check (n)
+- key → proposed check, tracked on bead site-34
 
 ### Moved (n)
 - key → bead site-12 (note added) | .beads/KNOWLEDGE.md § Topic
