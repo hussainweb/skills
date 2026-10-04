@@ -1,0 +1,10 @@
+{
+  "name": "model-bar",
+  "version": "0.1.0",
+  "description": "Claude Code band above the prompt: a model picker, context fill, prompt cache state, rate limits and session cost",
+  "author": {
+    "name": "Hussain Abbas"
+  },
+  "hooks": "./claude-code/hooks.json",
+  "types": "./claude-code/types/index.d.ts"
+}
