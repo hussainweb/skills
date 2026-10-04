@@ -18,7 +18,14 @@ const DEFERRED = [
   { id: 'stele-b', title: 'b', defer_until: '2026-10-17T04:00:00Z' },
 ]
 
-const MEMORIES = { 'conventions-a': 'one', 'conventions-b': 'two', 'host-split': 'three' }
+// `bd memories --json` keys memories by name and adds metadata keys such as
+// schema_version alongside them; those must not be counted.
+const MEMORIES = {
+  'conventions-a': 'one',
+  'conventions-b': 'two',
+  schema_version: 1,
+  'host-split': 'three',
+}
 
 // 13,186 characters, about 3.3k tokens.
 const PRIME = 'x'.repeat(13_186)

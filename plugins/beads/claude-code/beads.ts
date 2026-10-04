@@ -13,14 +13,16 @@ export const parseBeads = (stdout: string): Bead[] | undefined => {
   }
 }
 
-// How many memories `bd memories --json` lists, keyed by name, or undefined
-// when the output is not that object.
+// How many memories `bd memories --json` lists, or undefined when the output
+// is not an object keyed by memory name. Each memory's value is its text; the
+// object also carries metadata such as `schema_version`, which is not a
+// memory, so only string values count.
 export const countMemories = (stdout: string): number | undefined => {
   try {
     const memories: unknown = JSON.parse(stdout)
 
     return memories !== null && typeof memories === 'object' && !Array.isArray(memories)
-      ? Object.keys(memories).length
+      ? Object.values(memories).filter((value) => typeof value === 'string').length
       : undefined
   } catch {
     return undefined
