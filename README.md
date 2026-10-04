@@ -49,14 +49,6 @@ Drive Atlassian Cloud products from the command line.
 |-------|---------|-------------|
 | [acli](./skills/atlassian/acli/SKILL.md) | `npx skills add hussainweb/skills@acli` | Drive Atlassian Cloud (Jira and Confluence) via the `acli` CLI — work items, projects, boards, sprints, pages, spaces, and blogs, with API-token authentication |
 
-### Git
-
-Conventions for working with git history.
-
-| Skill | Install | Description |
-|-------|---------|-------------|
-| [conventional-commits](./skills/git/conventional-commits/SKILL.md) | `npx skills add hussainweb/skills@conventional-commits` | Write commit messages following the Conventional Commits v1.0.0 specification — type, scope, description, and breaking-change conventions, with no agent attribution |
-
 ### GitHub
 
 Repository automation driven through the `gh` CLI.
@@ -65,16 +57,6 @@ Repository automation driven through the `gh` CLI.
 |-------|---------|-------------|
 | [dependabot-config](./skills/github/dependabot-config/SKILL.md) | `npx skills add hussainweb/skills@dependabot-config` | Write and review `.github/dependabot.yml` — plain weekly schedules with no pinned time, every ecosystem in the repo covered, dependencies grouped by release family, and cooldown/multi-directory options used only where they earn their place |
 | [merge-dependabot-prs](./skills/github/merge-dependabot-prs/SKILL.md) | `npx skills add hussainweb/skills@merge-dependabot-prs` | Batch-merge open Dependabot PRs — minor/patch bumps with green checks by default, rebase-merged with branch deletion, with overrides for majors, merge method, and CI gating; explains how safe each held-back major bump is for the project |
-
-### Beads
-
-Setting up and working with the [beads](https://github.com/gastownhall/beads) (`bd`) issue tracker, including multi-agent sessions driven by it.
-
-| Skill | Install | Description |
-|-------|---------|-------------|
-| [beads-init](./skills/beads/beads-init/SKILL.md) | `npx skills add hussainweb/skills@beads-init` | Set up beads in a repo the way this author wants it — `bd init` with auto-export off, JSONL exports and gate-lock files ignored, and the role set as maintainer unless the user says they are a contributor, AGENTS.md and CLAUDE.md cut to a pointer at the installed beads skill, all folded into init's own commit; or `bd bootstrap` on a fresh clone with the per-clone wiring redone and bootstrap's footprint outside the database undone. Slash-command only, never auto-triggered |
-| [beads-orchestrate](./skills/beads/beads-orchestrate/SKILL.md) | `npx skills add hussainweb/skills@beads-orchestrate` | Run a multi-agent session over an epic, a list of beads, or the ready queue — front-load the user's decisions, plan waves from dependencies and file overlap, launch self-contained agent prompts, relay reports, keep going as beads unblock, and close out, with beads notes as the shared memory |
-| [beads-trim-memories](./skills/beads/beads-trim-memories/SKILL.md) | `npx skills add hussainweb/skills@beads-trim-memories` | Review the persistent memories `bd prime` injects into every session — check each against the repo and the beads, recommend keep, rewrite, move or drop, apply only what the user confirms, and park occasional knowledge on the bead it concerns or in a committed knowledge file. Slash-command only, never auto-triggered |
 
 ### Writing and notes
 
@@ -86,6 +68,23 @@ Personal writing voice and note-taking conventions.
 | [interviewer](./skills/writing/interviewer/SKILL.md) | `npx skills add hussainweb/skills@interviewer` | Conduct interactive Socratic interviews to draw out authentic insights, lived experiences, and nuances from the user before writing or planning |
 | [logseq-organization](./skills/writing/logseq-organization/SKILL.md) | `npx skills add hussainweb/skills@logseq-organization` | Format and file Logseq notes to a specific vault's conventions — journals, tags, namespaces, and directory structure |
 | [capture-learning](./skills/writing/capture-learning/SKILL.md) | `npx skills add hussainweb/skills@capture-learning` | Capture technical realizations to Logseq as they surface in conversation — non-obvious behaviors, corrected assumptions, and debugged root causes |
+
+## Plugins
+
+Some skills ship inside a plugin instead, alongside behaviour that only an agent's own plugin system can add. A plugin lives at `plugins/<name>/` and holds:
+
+- **`plugin.json`** — the manifest Antigravity reads.
+- **`.claude-plugin/plugin.json`** — the manifest Claude Code reads; it points Claude Code at `claude-code/`.
+- **`skills/`** — the plugin's skills, the only copy of them. `npx skills` does not install these.
+- **`claude-code/`** — Claude Code mods (hooks modules), with their types and tests. Other agents never look in here.
+
+| Plugin | Skills | Claude Code mod |
+|--------|--------|-----------------|
+| [beads](./plugins/beads) | [beads-init](./plugins/beads/skills/beads-init/SKILL.md), [beads-orchestrate](./plugins/beads/skills/beads-orchestrate/SKILL.md), [beads-trim-memories](./plugins/beads/skills/beads-trim-memories/SKILL.md) — set up the [beads](https://github.com/gastownhall/beads) (`bd`) tracker, run multi-agent sessions over it, and trim the memories `bd prime` injects | A row above the prompt: the bead in progress, the ready count, and deferred beads that are due |
+| [git](./plugins/git) | [conventional-commits](./plugins/git/skills/conventional-commits/SKILL.md) — commit messages per Conventional Commits v1.0.0, with no agent attribution | A row above the prompt: branch, changes, stashes, an operation in progress, diff size, commits on the default branch, and the branch's PR with its checks and review |
+| [model-bar](./plugins/model-bar) | — | A row above the prompt: a model picker, context fill, prompt cache state, rate limits and session cost |
+
+Load them in Claude Code by listing the plugin directories in `CLAUDE_CODE_PLUGIN_DIRS` (the `env` block of `~/.claude/settings.json`), or for one session with `claude --plugin-dir <dir>`. Install them in Antigravity with `agy plugin install <dir>`. Run a plugin's mod tests with `claude plugin test plugins/<name>`.
 
 ## Skill Anatomy
 
