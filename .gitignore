@@ -2,3 +2,6 @@ __pycache__/
 *-workspace/
 .claude/settings.local.json
 .antigravitycli
+# Claude Code writes these into each plugin when it loads it.
+plugins/*/.claude-plugin/types/
+plugins/*/tsconfig.json
