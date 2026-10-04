@@ -4,5 +4,7 @@
   "description": "Beads issue tracking: skills to set up, orchestrate and trim beads, and a Claude Code row showing the bead in progress, the ready count and deferred beads that are due",
   "author": {
     "name": "Hussain Abbas"
-  }
+  },
+  "hooks": "./claude-code/hooks.json",
+  "types": "./claude-code/types/index.d.ts"
 }

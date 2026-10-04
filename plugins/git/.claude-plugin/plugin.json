@@ -4,5 +4,7 @@
   "description": "Git workflow: the conventional-commits skill, and a Claude Code row showing the branch, changes, operation in progress, diff size, commits on the default branch and the branch's PR",
   "author": {
     "name": "Hussain Abbas"
-  }
+  },
+  "hooks": "./claude-code/hooks.json",
+  "types": "./claude-code/types/index.d.ts"
 }
