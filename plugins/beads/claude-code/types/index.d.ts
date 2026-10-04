@@ -3,6 +3,10 @@ export type BeadsState = {
   others: number
   ready: number
   due: number
+  // Persistent memories (`bd remember`) and the estimated tokens `bd prime`
+  // injects, when bd could report them.
+  memories?: number
+  primeTokens?: number
 }
 
 declare module 'claude-code' {

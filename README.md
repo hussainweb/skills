@@ -80,7 +80,7 @@ Some skills ship inside a plugin instead, alongside behaviour that only an agent
 
 | Plugin | Skills | Claude Code mod |
 |--------|--------|-----------------|
-| [beads](./plugins/beads) | [beads-init](./plugins/beads/skills/beads-init/SKILL.md), [beads-orchestrate](./plugins/beads/skills/beads-orchestrate/SKILL.md), [beads-trim-memories](./plugins/beads/skills/beads-trim-memories/SKILL.md) — set up the [beads](https://github.com/gastownhall/beads) (`bd`) tracker, run multi-agent sessions over it, and trim the memories `bd prime` injects | A row above the prompt: the bead in progress, the ready count, and deferred beads that are due |
+| [beads](./plugins/beads) | [beads-init](./plugins/beads/skills/beads-init/SKILL.md), [beads-orchestrate](./plugins/beads/skills/beads-orchestrate/SKILL.md), [beads-trim-memories](./plugins/beads/skills/beads-trim-memories/SKILL.md) — set up the [beads](https://github.com/gastownhall/beads) (`bd`) tracker, run multi-agent sessions over it, and trim the memories `bd prime` injects | A row above the prompt: the bead in progress, the ready count, deferred beads that are due, how many memories there are and roughly how many tokens `bd prime` injects |
 | [git](./plugins/git) | [conventional-commits](./plugins/git/skills/conventional-commits/SKILL.md) — commit messages per Conventional Commits v1.0.0, with no agent attribution | A row above the prompt: branch, changes, stashes, an operation in progress, diff size, commits on the default branch, and the branch's PR with its checks and review |
 | [model-bar](./plugins/model-bar) | — | A row above the prompt: a model picker, context fill, prompt cache state, rate limits and session cost |
 

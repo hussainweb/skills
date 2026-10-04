@@ -18,14 +18,21 @@ const DEFERRED = [
   { id: 'stele-b', title: 'b', defer_until: '2026-10-17T04:00:00Z' },
 ]
 
+const MEMORIES = { 'conventions-a': 'one', 'conventions-b': 'two', 'host-split': 'three' }
+
+// 13,186 characters, about 3.3k tokens.
+const PRIME = 'x'.repeat(13_186)
+
 const BEADS_LINE =
-  '◆ stele-zyi Ask activity page: give the usage panel… (+1) · 111 ready · 1 deferred due'
+  '◆ stele-zyi Ask activity page: give the usage panel… (+1) · 111 ready · 1 deferred due · 3 memories · prime ~3.3k tokens'
 
 type World = {
   hasBeads?: boolean
   inProgress?: unknown[]
   // bd cannot start at all (not installed, timed out).
   isMissing?: boolean
+  // bd memories and bd prime fail while the rest works.
+  isMemoryBroken?: boolean
 }
 
 const run = (exitCode: number, stdout: string) => ({
@@ -42,6 +49,10 @@ const engine = (on: On, world: World = {}) => {
 
     if (world.isMissing === true) throw new Error('bd: command not found')
     if (world.hasBeads !== true) return run(1, '')
+    if (args.startsWith('bd memories')) {
+      return world.isMemoryBroken === true ? run(1, '{"error":"x"}') : run(0, JSON.stringify(MEMORIES))
+    }
+    if (args.startsWith('bd prime')) return world.isMemoryBroken === true ? run(1, '') : run(0, PRIME)
     if (args.includes('in_progress')) return run(0, JSON.stringify(world.inProgress ?? IN_PROGRESS))
     if (args.includes('ready')) {
       return run(0, JSON.stringify(Array.from({ length: 111 }, (_, i) => ({ id: `r${i}`, title: '' }))))
@@ -115,6 +126,17 @@ test('the bead id is cyan and what is due is yellow', async ($, on) => {
 
 test('with nothing in progress the row shows the counts alone', async ($, on) => {
   const { clock } = engine(on, { hasBeads: true, inProgress: [] })
+  await completeTurn($, clock)
+
+  const ui = await mount($)
+  expect((await ui.find({ key: 'band:30:beads' }))?.text).toBe(
+    '111 ready · 1 deferred due · 3 memories · prime ~3.3k tokens',
+  )
+  await ui.unmount()
+})
+
+test('when bd cannot report memories or prime the row leaves them out', async ($, on) => {
+  const { clock } = engine(on, { hasBeads: true, inProgress: [], isMemoryBroken: true })
   await completeTurn($, clock)
 
   const ui = await mount($)

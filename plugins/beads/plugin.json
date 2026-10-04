@@ -1,7 +1,7 @@
 {
   "name": "beads",
   "version": "0.1.0",
-  "description": "Beads issue tracking: skills to set up, orchestrate and trim beads, and a Claude Code row showing the bead in progress, the ready count and deferred beads that are due",
+  "description": "Beads issue tracking: skills to set up, orchestrate and trim beads, and a Claude Code row showing the bead in progress, the ready count, deferred beads that are due, the memory count and the estimated size of `bd prime`",
   "author": {
     "name": "Hussain Abbas"
   }

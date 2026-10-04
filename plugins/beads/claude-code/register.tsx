@@ -8,7 +8,14 @@ import type {
 } from 'claude-code'
 
 import type { BeadsState } from './types'
-import { type Bead, parseBeads, summariseBeads } from './beads'
+import {
+  type Bead,
+  countMemories,
+  estimateTokens,
+  formatTokens,
+  parseBeads,
+  summariseBeads,
+} from './beads'
 
 // Events fill this and the band only reads it, so drawing runs no commands.
 const beads = atom({ plugin: 'beads', key: 'beads' } as const, null)
@@ -41,17 +48,39 @@ const bd = async ($: EngineInterface, args: string[]): Promise<Bead[] | undefine
   return ran?.exitCode === 0 ? parseBeads(ran.stdout) : undefined
 }
 
+const memoryCount = async ($: EngineInterface): Promise<number | undefined> => {
+  const ran = await run($, ['bd', 'memories', '--json'], { timeoutMs: 10_000 })
+
+  return ran?.exitCode === 0 ? countMemories(ran.stdout) : undefined
+}
+
+// What a session-start hook running `bd prime` adds to the context.
+const primeTokens = async ($: EngineInterface): Promise<number | undefined> => {
+  const ran = await run($, ['bd', 'prime'], { timeoutMs: 10_000 })
+
+  return ran?.exitCode === 0 && ran.stdout.length > 0 ? estimateTokens(ran.stdout) : undefined
+}
+
 // bd takes a few tenths of a second per call, so this is never waited on.
 const refreshBeads = async ($: EngineInterface) => {
-  const [inProgress, ready, deferred] = await Promise.all([
+  const [inProgress, ready, deferred, memories, prime] = await Promise.all([
     bd($, ['list', '--status', 'in_progress']),
     bd($, ['ready', '--limit', '0']),
     bd($, ['list', '--deferred']),
+    memoryCount($),
+    primeTokens($),
   ])
   const next: BeadsState | null =
     inProgress === undefined || ready === undefined
       ? null
-      : summariseBeads(inProgress, ready.length, deferred ?? [], await $.clock.now())
+      : summariseBeads(
+          inProgress,
+          ready.length,
+          deferred ?? [],
+          await $.clock.now(),
+          memories,
+          prime,
+        )
 
   await update($, beads, prev => (same(prev, next) ? (prev ?? null) : next))
 }
@@ -132,6 +161,15 @@ export const register: Register = on => {
           )}
           <Text>{b.ready} ready</Text>
           {b.due > 0 ? <Text color="yellow"> · {b.due} deferred due</Text> : null}
+          {b.memories === undefined ? null : (
+            <Text dimColor>
+              {' · '}
+              {b.memories} {b.memories === 1 ? 'memory' : 'memories'}
+            </Text>
+          )}
+          {b.primeTokens === undefined ? null : (
+            <Text dimColor> · prime ~{formatTokens(b.primeTokens)} tokens</Text>
+          )}
         </Text>
       </Box>
     )

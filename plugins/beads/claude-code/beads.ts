@@ -13,11 +13,34 @@ export const parseBeads = (stdout: string): Bead[] | undefined => {
   }
 }
 
+// How many memories `bd memories --json` lists, keyed by name, or undefined
+// when the output is not that object.
+export const countMemories = (stdout: string): number | undefined => {
+  try {
+    const memories: unknown = JSON.parse(stdout)
+
+    return memories !== null && typeof memories === 'object' && !Array.isArray(memories)
+      ? Object.keys(memories).length
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// A rough token count for text, at about four characters a token: close
+// enough to tell a lean `bd prime` from one that crowds the context.
+export const estimateTokens = (text: string): number => Math.round(text.length / 4)
+
+export const formatTokens = (tokens: number): string =>
+  tokens < 1000 ? `${tokens}` : `${(tokens / 1000).toFixed(1).replace(/\.0$/, '')}k`
+
 export const summariseBeads = (
   inProgress: Bead[],
   ready: number,
   deferred: Bead[],
   now: number,
+  memories?: number,
+  primeTokens?: number,
 ): BeadsState => {
   const latest = [...inProgress].sort((a, b) =>
     (b.updated_at ?? '').localeCompare(a.updated_at ?? ''),
@@ -29,5 +52,7 @@ export const summariseBeads = (
     ready,
     due: deferred.filter(b => b.defer_until !== undefined && Date.parse(b.defer_until) <= now)
       .length,
+    memories,
+    primeTokens,
   }
 }
