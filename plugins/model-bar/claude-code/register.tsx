@@ -129,7 +129,12 @@ const texts = (state: Bar, show: Show) => {
   const percent = state.contextPercent
   const limits = state.limits
     .filter(l => show.allLimits || l.kind === 'five_hour')
-    .map(l => ({ ...l, text: `${LIMIT_LABELS[l.kind] ?? l.kind} ${l.percentUsed}%` }))
+    .map(l => {
+      const label = LIMIT_LABELS[l.kind] ?? l.kind
+      const percentText = `${l.percentUsed}%`
+
+      return { ...l, label, percentText, text: `${label} ${percentText}` }
+    })
   const hasCache = state.cacheWarmUntil !== undefined || state.cacheHitPercent !== undefined
   const cacheParts = [
     'cache',
@@ -284,7 +289,7 @@ export const register: Register = on => {
       return next(e)
     }
 
-    const { Box, Select, Text } = $.ui.resolve(e)
+    const { Box, Button, Select, Text } = $.ui.resolve(e)
     const show = fit(state, e.props.bodyColumns)
     const t = texts(state, show)
     const active = currentAlias(state.model)
@@ -297,6 +302,10 @@ export const register: Register = on => {
       ...MODELS.map(m => ({ value: m.alias, label: m.alias === active ? t.model : m.alias })),
     ]
     const selected = active ?? state.model
+
+    const openUsage = () => {
+      void $.command.run({ command: 'usage' })
+    }
 
     const switchTo = (value: string) => {
       if (value !== selected) {
@@ -332,19 +341,19 @@ export const register: Register = on => {
           </Box>
         )}
         {t.limits.length > 0 ? sep : null}
+        {/* A Button takes no color, so the label opens /usage and the figure keeps its level. */}
         {t.limits.map(l => (
-          <Box key={`limit-${l.kind}`} flexShrink={0}>
+          <Box key={`limit-${l.kind}`} flexDirection="row" flexShrink={0} gap={1}>
+            <Button key={`usage-${l.kind}`} plain dimColor label={l.label} onPress={openUsage} />
             <Text color={levelColor(l.percentUsed)} wrap="truncate">
-              {l.text}
+              {l.percentText}
             </Text>
           </Box>
         ))}
         {show.cost && t.cost !== undefined ? sep : null}
         {show.cost && t.cost !== undefined ? (
           <Box key="cost" flexShrink={0}>
-            <Text dimColor wrap="truncate">
-              {t.cost}
-            </Text>
+            <Button key="usage-cost" plain dimColor label={t.cost} onPress={openUsage} />
           </Box>
         ) : null}
       </Box>

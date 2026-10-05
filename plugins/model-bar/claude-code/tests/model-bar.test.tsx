@@ -19,7 +19,7 @@ const bandProps = (bodyColumns: number) => ({
 // `beneath` is what the mods under this one drew: one plain row, or ranked band rows by key.
 const engine = (on: On, model: string, beneath?: string | string[]) => {
   const switched: string[] = []
-  const reads = { usage: 0 }
+  const reads = { usage: 0, usagePanel: 0 }
 
   on('session.model', () => ({ value: model }))
   on('session.usage', () => {
@@ -39,6 +39,11 @@ const engine = (on: On, model: string, beneath?: string | string[]) => {
   })
   on('command.run', { command: 'model' }, (_$, e) => {
     switched.push(e.args)
+
+    return {}
+  })
+  on('command.run', { command: 'usage' }, () => {
+    reads.usagePanel += 1
 
     return {}
   })
@@ -123,8 +128,10 @@ test('shows the model, context, cache and limits after a turn', async ($, on) =>
     expect(await text(ui, 'context')).toContain('620k/1M')
     expect(await text(ui, 'cache')).toContain('90% hit')
     expect(await text(ui, 'cache')).toContain('until')
-    expect(await text(ui, 'limit-five_hour')).toBe('5h 38%')
-    expect(await text(ui, 'limit-seven_day')).toBe('7d 12%')
+    expect((await ui.find({ key: 'usage-five_hour', type: 'Button' }))?.props.label).toBe('5h')
+    expect(await text(ui, 'limit-five_hour')).toContain('38%')
+    expect((await ui.find({ key: 'usage-seven_day', type: 'Button' }))?.props.label).toBe('7d')
+    expect(await text(ui, 'limit-seven_day')).toContain('12%')
     expect(await text(ui, 'cost')).toContain('$1.23')
     await ui.unmount()
   }
@@ -188,6 +195,23 @@ test('picking a different model runs /model with its alias; the current one does
   }
 
   expect(switched).toEqual(['sonnet', 'sonnet'])
+})
+
+test('pressing a limit label or the cost opens /usage', async ($, on) => {
+  mock.clock(on, { now: 0 })
+  const { reads } = engine(on, 'claude-opus-5-5')
+  await completeTurn($)
+
+  for (const surface of SURFACES) {
+    const ui = await mount($, surface)
+
+    await ui.press({ key: 'usage-five_hour' })
+    await ui.press({ key: 'usage-seven_day' })
+    await ui.press({ key: 'usage-cost' })
+    await ui.unmount()
+  }
+
+  expect(reads.usagePanel).toBe(6)
 })
 
 test('a narrow band keeps the picker and the percentage', async ($, on) => {
