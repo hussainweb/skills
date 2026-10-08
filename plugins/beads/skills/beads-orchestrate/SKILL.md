@@ -4,7 +4,7 @@ description: Run a multi-agent development session over a batch of beads (`bd`) 
 allowed-tools: Bash, Read, Grep, Glob, Agent, SendMessage, AskUserQuestion
 metadata:
   authors: "Hussain Abbas"
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # Beads orchestration
@@ -114,12 +114,25 @@ they will touch. Plan past the first wave: beads that are blocked today go into 
 waves, keyed to the bead that unblocks them. A plan that covers only what `bd ready` shows
 right now ends the session after one wave.
 
-- Independent beads in different areas run **in parallel**, one agent each.
+- Independent beads in different areas run **in parallel**, in separate agents.
 - Beads that touch the same area — the same auth code, both adding a database migration,
   both editing the lockfile — run **serially in one agent**. Two agents adding migrations in
   parallel will pick the same number; two agents editing a lockfile will conflict.
-- Don't create agents you don't need: one agent per coherent chain, not one per bead. Every
-  agent costs a cold start, a dependency install, and a report you must read.
+- **Group beads into an agent by shared context, not to save agents.** Beads belong together
+  when they sit in the same area, touch the same files, follow one dependency chain or rest
+  on the same decision: the agent then reuses what it learned on the first bead instead of
+  re-reading it for the next. One agent per bead throws that away. "Fewer agents" on its own
+  is not a reason to put beads together.
+- **Cap a group at roughly 3-4 beads, or one epic's slice.** A long chain carries every
+  earlier bead's file reads in its context on every request, cannot be stopped at a bead
+  boundary without the stop request in Phase 4, and loses the most when it dies on a usage
+  limit or an API error. (Measured: a 10-bead agent ran to 184 tool uses and 367k tokens; a
+  6-bead agent hit the usage limit on bead 5, mid-edit, with 32 uncommitted files.) Beyond
+  the cap, split the chain: a second agent starts from the first agent's hand-off notes on
+  the beads and reuses the same worktree.
+- Small independent beads in different areas, the "hygiene" batch, are **not** one coherent
+  chain just because each is small. Give them two or three agents of related items rather
+  than one agent of ten.
 - Give every shared, limited resource **one owner**. That covers the lockfile, but also a
   budget of requests to someone else's live system, a rate-limited API, or a single test
   account. One owner keeps the pacing coherent and the request log in one place.
@@ -158,6 +171,17 @@ areas other agents own, the git and deploy policy, and the report format spelled
   a different repo from the beads (or from your working directory), agents create their
   worktrees themselves (`git -C <repo> worktree add ../<repo>-wt/<name> -b <branch> main`).
   They reach the beads with `BEADS_DIR=<beads repo>/.beads bd ...`. Put both in the prompt.
+- **Probe harness isolation before the first wave.** A hook that rewrites commands (one
+  that wraps every command in `rtk`, say) can collide with the harness's worktree guard, so
+  an isolated agent cannot run git at all, and the refusal is inconsistent between agents
+  in the same session. Before dispatching a wave into harness-isolated worktrees, dispatch
+  one tiny isolated probe (`git status`, `npm ci --dry-run` or the equivalent, `bd show
+  <id>`) and wait for it. If git is refused, launch the agents un-isolated and have them
+  create their own worktrees with `git worktree add`, as for the other-repo case above.
+  Every prompt, isolated or not, carries the hard-stop rule from
+  `references/agent-prompt.md` section 5: a refused git command means stop and report the
+  refusal text, never a wrapper script or a workaround. An agent that tries one is flagged
+  as a bypass and locked out of bd and file reads too.
 - Per-checkout dev environments collide: two worktrees of a DDEV, Lando or Docker Compose
   project have the same project name. Tell each agent how to give its environment a unique,
   uncommitted name (e.g. `.ddev/config.local.yaml`), and to stop it when done.
@@ -194,10 +218,26 @@ When an agent reports (format in `references/agent-report.md`):
    the whole current wave if the next bead only needed one of them.
 
 **Continue a finished agent rather than starting a new one** when its next bead is in the
-same area. SendMessage resumes it with its context intact: the repo layout, the gotchas and
-its own earlier work. That is cheaper than a cold start and keeps chains coherent. Give it
-the new bead, what has changed on main since, any new boundaries, and any memories that
-apply to the new bead and were not in its first brief.
+same group (Phase 2): same area, same files, one chain. SendMessage resumes it with its
+context intact: the repo layout, the gotchas and its own earlier work. Give it the new bead,
+what has changed on main since, any new boundaries, and any memories that apply to the new
+bead and were not in its first brief. Across groups, start fresh: a new agent in the same
+worktree, briefed from the hand-off notes. Start fresh too when the finished agent's report
+or task notification shows hundreds of tool uses; that is the signal its context is large,
+and the next bead would carry all of it on every request. Resuming needs the agent's
+worktree to still exist, so don't remove one you may continue (Phase 5).
+
+**When you need agents to stop** (the user asks, quota is running low, the plan changes),
+send each running agent this stop request via SendMessage rather than killing the task. A
+killed agent leaves a dirty tree and no note; an agent given this stops within a tool round
+or two with a clean tree and a hand-off:
+
+1. Finish only the edit you are in the middle of, and only if it is seconds from done.
+2. Run the gates once. Commit every coherent piece that passes, as atomic Conventional
+   Commits. Do not push anything new; let an in-flight push finish its CI watch.
+3. `bd note <bead>` with what is committed (hashes, and what each covers), what is
+   uncommitted and partial, what the next step is, and the worktree path and branch.
+4. Reply with the report format, kept short. Leave the worktree in place.
 
 **When agents stop early** (usage limits, crashes, API errors), several can die at once,
 mid-task. Before resuming anything:
@@ -207,9 +247,9 @@ mid-task. Before resuming anything:
 2. Resume the same agents via SendMessage. Tell them what state they left, that their own
    sub-agents are gone, and to sort their work into complete and partial rather than
    assuming it is done.
-3. If quota is short, have them commit the verified work first. If they can't finish, they
-   leave a bead note saying exactly what's done, what's partial and what's next, with
-   nothing uncommitted.
+3. If quota is short, send the stop request above instead of a resume: verified work gets
+   committed first, and if they can't finish, a bead note says exactly what's done, what's
+   partial and what's next, with nothing uncommitted.
 
 When a new decision comes up mid-session — from the user or surfaced by an agent — record it
 on the bead first, then message the running agent it affects (SendMessage) with the
@@ -226,9 +266,14 @@ beads are in scope, ask rather than stopping.
    attribution), CI on the final commit, and live health for anything deployed.
 2. **Write the session result** as a note on the epic: beads shipped (with commits), what
    waits on the user, and what shipped unverified.
-3. **Clean up worktrees.** For each, confirm its branch is merged and the tree is clean, then
-   remove it, along with its dev environment (e.g. `ddev delete -Oy`) and its merged branch.
-   Leave anything unmerged or dirty and say so.
+3. **Clean up worktrees, after the session's last wave.** A harness-isolated agent cannot
+   be resumed once its worktree is gone (SendMessage fails with "its worktree no longer
+   exists"), so a clean, merged worktree stays in place until you are sure you will not
+   continue that agent. An agent that made its own worktree with `git worktree add` is a
+   plain path to the harness and survives removal, but apply the same rule. Then, for each,
+   confirm its branch is merged and the tree is clean, and remove it along with its dev
+   environment (e.g. `ddev delete -Oy`) and its merged branch. Leave anything unmerged or
+   dirty and say so.
 4. **Save what the next session needs** that the beads don't hold: how the user wants these
    sessions run (lanes, conventions, where things live), as a `bd remember` memory, updated
    in place rather than duplicated.

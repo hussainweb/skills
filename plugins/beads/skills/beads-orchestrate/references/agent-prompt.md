@@ -87,6 +87,13 @@ Use the remote base only when it is current. With no remote, or with unpushed wo
 > Before reporting, rebase onto `main` if it moved, rerun the gates, and stop your dev
 > environment.
 
+Every prompt, isolated or not, carries this hard stop:
+
+> If the harness refuses a git command (a worktree guard, a hook, a permission classifier),
+> stop and report the refusal text verbatim under Flags. Do not wrap git in a script, alias
+> it, or route around the refusal in any other way. A workaround reads as a bypass and locks
+> you out of bd and file reads as well.
+
 ## 6. Quality gates and commits
 
 > - Before every commit run `<the repo's gates, e.g. npm run lint && npm run typecheck && npm test>`.
@@ -105,8 +112,17 @@ Use the remote base only when it is current. With no remote, or with unpushed wo
 Include this section only when the user said pushing or deploying is fine. Otherwise:
 "Do not push. Report the branch and commits."
 
-> - Push to `<branch>`. Follow CI to the end (`gh run watch` or equivalent); a push is not
->   done until CI is green.
+> - Push each finished bead on its own, after its commits pass the gates, rather than
+>   batching beads into one push. A small deploy pins to one bead and reverts cleanly.
+> - Push to `<branch>`. Follow CI to the end; a push is not done until CI is green. Watch the
+>   **newest** run on `<branch>` (`gh run list --branch <branch> --limit 1`, then `gh run
+>   watch <id>`), not only the run for your sha. Other lanes push to the same branch, and
+>   the CI concurrency group cancels a queued run when the next push arrives; the newer run
+>   carries both commits. A cancelled run superseded by a later green run that contains your
+>   commit is normal, not a failure. A cancelled run with no later green run is a failure.
+> - Before pushing, check whether another lane's deploy is still rolling (the newest run on
+>   `<branch>` is in progress). If it is, hold your push until that run finishes, so you
+>   don't cancel a deploy under it.
 > - After the deploy, verify the live system with what you can check: `<health URL, a curl
 >   against an endpoint, logs>`. Say what you could not check.
 > - If a deploy doesn't recover, revert immediately (`git revert`, push), confirm health, and
@@ -127,7 +143,10 @@ State preconditions for risky pushes explicitly, with the fallback:
 > - Use `bd remember` only for facts every future session needs (a convention, a trap), not
 >   for progress.
 > - Close each bead when its acceptance criteria are met: `bd close <id> --reason "<what shipped, commits>"`.
->   If a criterion is unmet, leave it open with a note saying which.
+>   If a criterion is unmet, leave it open with a note saying which. The exception is a
+>   check you cannot do on this host (a visual or browser check with no browser here): close
+>   the bead and file `bd create "Laptop review: <what to look at and where>" --deps
+>   discovered-from:<id>`, so the user picks it up where they can see it.
 
 ## 9. Report
 
