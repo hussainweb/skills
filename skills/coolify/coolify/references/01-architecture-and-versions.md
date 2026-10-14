@@ -129,17 +129,17 @@ Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.
 
 Symptom, unchanged and still the thing to recognise: a server where someone ran `sudo docker login ghcr.io` (credentials in root's home) while Coolify connects as `ubuntu` fails with `Error error from registry: unauthorized` on the first private image and `Interrupted` on the others. Because the pull now happens before anything stops, the running containers are untouched, the site stays up on the old images, and nothing looks wrong until you check what is deployed. The version jump arrives through Coolify's own auto-update, so it is easy to miss: check `docker inspect coolify --format '{{.Config.Image}} {{.Created}}'` on the control plane.
 
-Fix: `docker login` as the SSH user (no `sudo`), or copy root's config into that user's home, owned by the user, mode 600. Then redeploy. Full detail and the diagnostic path in `07-github-actions-deployment.md` §2 and `08-troubleshooting.md` §2.4.
+Fix: a login written to the SSH user's `~/.docker/config.json` — `docker login` as that user, or `sudo docker --config /home/<user>/.docker login` when that user is not in the `docker` group — owned by the user, mode 600; or copy root's config there. Then redeploy. Full detail and the diagnostic path in `07-github-actions-deployment.md` §2 and `08-troubleshooting.md` §2.4.
 
 **Why it worked before** is an open question with a leading, unconfirmed explanation and a test that would settle it: §4 of `08-troubleshooting.md`.
 
 **What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23:
 
-- The deploy's pre-pull and `docker compose up` both run **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`. They use the **SSH user's** login.
-- Every host-side `docker compose up -d` — restart, start-after-stop, service deploy, auto-start after a reboot — is sudo-wrapped whenever the server is non-root, so it reads **root's** `~/.docker/config.json`.
+- The deploy's pre-pull runs **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`, so it uses the **SSH user's** login. So does the deploy's `docker compose up` — **by default**. Two resource settings move that `up` onto the host: **Preserve repository during deployment**, and **raw compose deployment** without a custom start command (raw compose *with* a custom start command stays in the helper). The deploy log shows which ran: the helper form is prefixed `docker exec <helper>`, the host form is `sudo … docker compose --env-file /data/coolify/applications/<uuid>/.env --project-directory /data/coolify/applications/<uuid> … up -d`.
+- Every host-side `docker compose up -d` — restart, start-after-stop, service deploy, auto-start after a reboot, and the two deploy cases above — is sudo-wrapped whenever the server is non-root, so it reads **root's** `~/.docker/config.json`.
 - Build-server deploys run on the host too, and Coolify passes `up --pull always` explicitly, so they pull as root whatever the compose file says.
 
-Observed consequence: with the login configured for the SSH user only, a private image pulls successfully during deploy and then fails `unauthorized` a few steps later, on the same image, as soon as something host-side is made to pull. `pull_policy: always` is what usually makes it pull — which is why that rule inverted at 4.3.19. See `02-docker-compose.md` §8B.
+Observed consequence: with the login configured for the SSH user only, a private image pulls successfully during deploy and then fails `unauthorized` a few steps later, on the same image, as soon as something host-side is made to pull. `pull_policy: always` is what usually makes it pull — which is why that rule inverted at 4.3.19. With preserve-repository on, "a few steps later" is the same deploy: the pre-pull succeeds and the host-side `up -d` fails (observed on 4.3.23). See `02-docker-compose.md` §8B.
 
 ## 4. What Coolify actually is
 
