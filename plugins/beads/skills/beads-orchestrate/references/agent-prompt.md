@@ -27,8 +27,9 @@ memories you selected (Phase 3).
 >    they hold decisions and hand-offs from earlier work.
 > 3. `bd update <id> --claim` for each bead as you start it, not all at once.
 >
-> **bd, in brief.** `bd show <id>` reads a bead; `bd note <id> "<text>"` appends a note (never
-> replace the notes field); `bd close <id> --reason "<what shipped, commits>"` closes;
+> **bd, in brief.** `bd show <id>` reads a bead; `bd note <id> "<text>"` appends a note. Never
+> use `bd update --notes`: it replaces the whole notes field and destroys the hand-off history
+> on the bead. `bd close <id> --reason "<what shipped, commits>"` closes;
 > `bd create "<title>" --deps discovered-from:<id>` files a follow-up; `bd remember` is only
 > for facts every future session needs. `bd memories <keyword>` searches the project's saved
 > memories, and returns only the matches.
