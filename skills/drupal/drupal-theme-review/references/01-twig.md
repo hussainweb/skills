@@ -57,13 +57,18 @@ Red flags for `|raw`:
 {# File URL from URI #}
 {{ file_url(file.uri.value) }}
 
-{# Render other things inline (use sparingly — prefer field formatters) #}
-{{ drupal_block('system_branding_block') }}
-{{ drupal_menu('main') }}
-{{ drupal_view('frontpage', 'block_1') }}
-{{ drupal_config('system.site', 'name') }}
-{{ drupal_entity('node', 42) }}
+{# Build attributes and class lists (twig/html-extra, 11.4+) #}
+{{ create_attribute({'class': ['card'], 'data-id': id}) }}
+<div class="{{ html_classes('card', {'card--featured': featured}) }}">
+<button {{ html_attr({'type': 'button', 'aria-expanded': 'false'}) }}>
+{% set btn = html_cva(base: 'btn', variants: {size: {sm: 'btn--sm', lg: 'btn--lg'}}) %}
+<a class="{{ btn.apply({size: size}) }}">
+
+{# drupal_block(), drupal_view(), drupal_entity(), drupal_config() are Twig Tweak (contrib),
+   not core. Use sparingly — prefer placing blocks and views through configuration. #}
 ```
+
+Flag string-built class lists (`class="card {{ featured ? 'card--featured' }}"`) when `html_classes()` or `attributes.addClass()` would do; they are easier to read and never produce stray whitespace.
 
 ## Drupal-Specific Twig Filters
 
@@ -118,6 +123,8 @@ With debug on, HTML comments show active template and all available suggestions:
 ```
 
 Never leave `debug: true` in production — it leaks internal template structure.
+
+Drupal 12 stays on Twig 3 (3.28+). Templates written for Twig 2 syntax (`{% filter %}`, `{% spaceless %}`, `sameas`, `divisibleby`) have been broken since Drupal 10; flag them as critical, not as style.
 
 ## Template Organization
 
@@ -206,11 +213,15 @@ Drupal passes content to templates as render arrays, not raw entity objects. Wor
   {{ 'Read more'|t }}
 </a>
 
-{# For external or computed URLs from fields, use check_url to strip javascript: etc. #}
-<a href="{{ field_url.value|check_url }}">{{ field_label.value }}</a>
+{# For link fields, render the field (formatter handles escaping and protocols) #}
+{{ content.field_link }}
+
+{# For a raw external URL string prepared in preprocess, strip dangerous protocols in PHP first:
+   $variables['cta_url'] = UrlHelper::stripDangerousProtocols($raw); #}
+<a href="{{ cta_url }}">{{ cta_label }}</a>
 ```
 
-Always use `path()` or `url()` Twig functions for internal routes. Never construct paths by string concatenation.
+Always use `path()` or `url()` Twig functions for internal routes. Never construct paths by string concatenation. There is no `check_url` filter in core; a template using one only works with a contrib extension.
 
 ## Including Sub-Templates
 

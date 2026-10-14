@@ -1,4 +1,4 @@
-# Single Directory Components (SDC) — Drupal 10.1+
+# Single Directory Components (SDC)
 
 ## What SDC Is
 
@@ -17,10 +17,12 @@ themes/custom/mytheme/components/
 
 ```yaml
 # components/my-card/my-card.component.yml
-'$schema': 'https://git.drupalcode.org/project/drupal/-/raw/10.1.x/core/modules/sdc/src/metadata.schema.json'
+'$schema': 'https://git.drupalcode.org/project/drupal/-/raw/12.0.x/core/assets/schemas/v1/metadata.schema.json'
 name: "My Card"
 status: "stable"          # stable | experimental | deprecated
 description: "A reusable card component for content teasers."
+tags:                     # 12.0+: lets other components' slots accept this one by tag
+  - card
 
 props:
   type: object
@@ -44,6 +46,23 @@ slots:
 ```
 
 **Props** are primitive values passed explicitly. **Slots** are Twig render arrays — content that can be any renderable Drupal markup.
+
+The `$schema` URL that pointed at `core/modules/sdc/src/metadata.schema.json` is stale: the `sdc` module has been an empty stub since 10.3 and the schema lives at `core/assets/schemas/v1/metadata.schema.json`. Flag the old URL; editors lose validation and autocomplete.
+
+### Slot Expectations and Cardinality (12.0+)
+
+A slot can declare which components it accepts and how many. Page builders enforce it; plain Twig includes do not, so the template must still cope with an empty slot.
+
+```yaml
+slots:
+  items:
+    title: "Accordion items"
+    expected:
+      - mytheme:accordion-item     # component ID
+      - accordion                  # or a tag declared by other components
+    minItems: 1
+    maxItems: 10
+```
 
 ## Component Template
 
@@ -128,6 +147,8 @@ libraryOverrides:
     - core/drupal
     - core/once
     - core/jquery
+  fonts:                   # 11.4+: preload fonts the component needs
+    - fonts/inter.woff2
 ```
 
 ## Configurable Heading Levels

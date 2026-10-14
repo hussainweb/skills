@@ -9,7 +9,7 @@
 ## Standard Post-Deploy Steps
 
 ```bash
-# Drush 10.3+ — single command
+# Single command
 drush deploy
 
 # Which is equivalent to:
@@ -96,12 +96,28 @@ $config['system.performance']['js']['preprocess'] = TRUE;
 ```json
 {
   "require": {
-    "drupal/core-recommended": "^10",
-    "drupal/pathauto": "^1.11"
+    "drupal/core-recommended": "^12",
+    "drupal/core-composer-scaffold": "^12",
+    "drupal/core-project-message": "^12",
+    "drupal/pathauto": "^1.13",
+    "drush/drush": "^13"
+  },
+  "require-dev": {
+    "drupal/core-dev": "^12"
   },
   "config": {
     "platform": {
-      "php": "8.4.0"
+      "php": "8.5.0"
+    },
+    "allow-plugins": {
+      "composer/installers": true,
+      "cweagans/composer-patches": true,
+      "drupal/core-composer-scaffold": true,
+      "drupal/core-project-message": true,
+      "php-http/discovery": true,
+      "phpstan/extension-installer": true,
+      "symfony/runtime": true,
+      "tbachert/spi": true
     }
   },
   "extra": {
@@ -115,9 +131,12 @@ $config['system.performance']['js']['preprocess'] = TRUE;
 ```
 
 **Rules:**
+- Start from `drupal/recommended-project`; `drupal/legacy-project` is abandoned since 11.4.
 - Commit `composer.lock` to Git — it guarantees identical builds across environments.
 - Use `composer install --no-dev` in production (excludes dev tools from the deployment).
-- Set `platform.php` to enforce version parity — prevents a `composer update` from pulling packages incompatible with your PHP version.
+- Set `platform.php` to the production PHP version (8.5 for Drupal 12) — prevents a `composer update` from pulling packages incompatible with your PHP version.
+- `symfony/runtime` is a Composer plugin since 11.4; it must be in `allow-plugins` or `composer install` fails.
+- `drupal/core-recommended` allows minor updates of core's dependencies since 11.4 and no longer pins Guzzle, Twig or the polyfills; `composer update "drupal/core-*" --with-dependencies` is the normal update command.
 - Never commit the `vendor/` directory.
 - Never manually modify files in `vendor/` or `web/core` — use patches instead.
 - Patching: use `cweagans/composer-patches` — patches are tracked in `composer.json`, applied automatically on `composer install`.
@@ -223,7 +242,7 @@ When deploying with Content Moderation enabled:
 3. `ddev drush sql:sync @prod @self` to pull production data
 4. `ddev drush rsync @prod:%files @self:%files` to pull files
 5. `ddev drush deploy` to apply any pending updates
-6. `ddev drush user:login` to get a one-time admin login link
+6. `ddev drush user:login` (or `ddev exec dr user:login`) to get a one-time admin login link
 
 Local `settings.local.php` should include:
 ```php
@@ -239,68 +258,110 @@ $config['stage_file_proxy.settings']['origin'] = 'https://www.example.com';
 $config['system.logging']['error_level'] = 'verbose';
 ```
 
-## Drush 13 — Modern Command Authoring
+## Command-Line Tools: Drush 13 and the Core `dr` CLI
 
-Drush 13 requires commands in `src/Drush/Commands/` and uses PHP attributes. The old `drush.services.yml` file and `DrushCommands` base class are both **deprecated** in Drush 13 and removed in Drush 14.
+Two CLIs coexist:
 
-### New Command Structure
+| | Drush 13 | Core `dr` (11.4+) |
+|---|---|---|
+| Install | `composer require drush/drush` | ships with core, `vendor/bin/dr` |
+| Status | stable; Drush 14 (branch `14.x`) targets Drupal 12 | `@internal` and experimental; API may change |
+| Site aliases, `sql:sync`, `deploy`, `cex/cim`, generators | yes | no |
+| Built-in commands | hundreds | `cache:rebuild`, `system:cron`, `system:status`, `user:login` (11.5), `install`, `quick-start`, `server`, `generate-theme`, `recipe:apply`, `recipe:info`, `content:export` |
+| Module commands | `src/Drush/Commands/` | `src/Command/` |
 
+Use Drush for deployments and day-to-day operations. Write module business logic once in a service, then expose it through a thin Drush command and (optionally) a thin `dr` command. `core/scripts/drupal` is deprecated; use `vendor/bin/dr` for `generate-theme`, `recipe:apply` and friends.
+
+### Service Holding the Logic
+
+```php
+// src/Sync/ProductSync.php — plain service registered in my_module.services.yml
+final class ProductSync {
+  public function run(string $id, bool $dryRun = FALSE): int { /* ... */ }
+}
 ```
-my_module/
-  src/
-    Drush/
-      Commands/
-        MyModuleCommands.php
+
+### Core `dr` Command (11.4+)
+
+Invokable class in `src/Command/`, discovered by the `#[AsCommand]` attribute, autowired, no `services.yml` entry. Command namespace is the module name with hyphens; never use the bare `core` namespace.
+
+```php
+namespace Drupal\my_module\Command;
+
+use Drupal\my_module\Sync\ProductSync;
+use Symfony\Component\Console\Attribute\Argument;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[AsCommand(
+  name: 'my-module:sync',
+  description: 'Sync products from the remote API.',
+  aliases: ['mms'],
+)]
+final class SyncCommand {
+
+  public function __construct(
+    private readonly ProductSync $sync,
+  ) {}
+
+  public function __invoke(
+    OutputInterface $output,
+    #[Argument('The product ID to sync.')]
+    string $id,
+    #[Option('Simulate without saving.')]
+    bool $dryRun = FALSE,
+  ): int {
+    $count = $this->sync->run($id, $dryRun);
+    $output->writeln("Synced $count products.");
+    return Command::SUCCESS;
+  }
+
+}
 ```
+
+Run with `vendor/bin/dr my-module:sync 42 --dry-run` (or `ddev exec dr ...`). Return `Command::SUCCESS` / `Command::FAILURE`; write with `OutputInterface`, log through the injected logger. The `#[Ask]` attribute prompts interactively for a missing argument.
+
+### Drush 13 Command
+
+Drush 13 discovers commands in `src/Drush/Commands/` through attributes, autowired with `AutowireTrait`. `drush.services.yml` is deprecated in Drush 13 and removed in Drush 14.
 
 ```php
 namespace Drupal\my_module\Drush\Commands;
 
+use Drupal\my_module\Sync\ProductSync;
+use Drush\Attributes as CLI;
 use Drush\Commands\AutowireTrait;
-use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
+use Drush\Commands\DrushCommands;
 
-#[AsCommand(
-  name: 'my_module:process',
-  description: 'Process something in my module',
-  aliases: ['mmp'],
-)]
-final class MyModuleCommands extends Command {
+final class MyModuleCommands extends DrushCommands {
 
-  // AutowireTrait provides automatic DI — no drush.services.yml needed
   use AutowireTrait;
 
   public function __construct(
-    private readonly EntityTypeManagerInterface $entityTypeManager,
-    private readonly LoggerInterface $logger,
+    private readonly ProductSync $sync,
   ) {
     parent::__construct();
   }
 
-  protected function configure(): void {
-    $this
-      ->addArgument('id', InputArgument::REQUIRED, 'The entity ID to process')
-      ->addOption('dry-run', NULL, InputOption::VALUE_NONE, 'Simulate without saving');
+  #[CLI\Command(name: 'my-module:sync', aliases: ['mms'])]
+  #[CLI\Argument(name: 'id', description: 'The product ID to sync.')]
+  #[CLI\Option(name: 'dry-run', description: 'Simulate without saving.')]
+  public function sync(string $id, array $options = ['dry-run' => FALSE]): void {
+    $count = $this->sync->run($id, (bool) $options['dry-run']);
+    $this->logger()->success(dt('Synced @count products.', ['@count' => $count]));
   }
 
-  protected function execute(InputInterface $input, OutputInterface $output): int {
-    $id     = $input->getArgument('id');
-    $dryRun = $input->getOption('dry-run');
-    // Logic here
-    $output->writeln('Done.');
-    return Command::SUCCESS;
-  }
 }
 ```
 
-### Old Drush Style — Do Not Use in New Code
+Keep the same command name in both so documentation and CI scripts work with either tool. Drush-specific niceties (`--format=table`, site aliases) stay in the Drush wrapper.
+
+### Old Drush Style — Do Not Use
 
 ```php
-// DEPRECATED — drush.services.yml-registered class extending DrushCommands
+// DEPRECATED — drush.services.yml-registered class with @command annotations
 class OldStyleCommands extends DrushCommands {
   /**
    * @command my_module:process
@@ -312,7 +373,7 @@ class OldStyleCommands extends DrushCommands {
 
 ---
 
-## Recipes — Drupal 11 Configuration Packages
+## Recipes — Configuration Packages
 
 **Recipes** replace Distributions as the recommended way to apply reusable configuration. Unlike modules, recipes are applied once and leave no ongoing maintenance coupling.
 
@@ -352,12 +413,15 @@ config:
 ### Applying a Recipe
 
 ```bash
-# Via Drush (recommended)
-drush recipe path/to/recipes/my-recipe
+# Via the core CLI (11.4+)
+vendor/bin/dr recipe:apply path/to/recipes/my-recipe
+vendor/bin/dr recipe:info path/to/recipes/my-recipe
 
-# Via core PHP script
-php core/scripts/drupal recipe path/to/recipes/my-recipe
+# Via Drush
+drush recipe path/to/recipes/my-recipe
 ```
+
+Since 11.4 recipes install extensions in batches; code that drove recipes programmatically should call `RecipeRunner::installModules()`. Install profiles can list recipes to apply automatically (11.5), which is the preferred way to build a reusable "site template" instead of a distribution.
 
 ### Recipe vs Module vs Distribution
 
@@ -381,7 +445,7 @@ php core/scripts/drupal recipe path/to/recipes/my-recipe
 | `/admin/config/development/configuration` | Config sync: compare filesystem vs database |
 | `/admin/config/development/performance` | Cache settings, CSS/JS aggregation |
 | `/admin/config/development/logging` | Error reporting verbosity |
-| `/admin/config/development/settings` | Twig debug, cache disable (Drupal 10.1+) |
+| `/admin/config/development/settings` | Twig debug, render cache disable |
 | `/admin/modules` | Enable/disable modules |
 | `/admin/reports/updates` | Available security and module updates |
 | `/admin/people/permissions` | Permission management |

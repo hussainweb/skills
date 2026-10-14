@@ -15,7 +15,7 @@
 
 ## Content Entity Definition
 
-Drupal 11 uses PHP attributes instead of Doctrine annotations. Always use the attribute form for new entities.
+Entity types are declared with PHP attributes. The Doctrine annotation form is deprecated and removed in Drupal 13; never use it in new entities.
 
 ```php
 namespace Drupal\products\Entity;
@@ -106,7 +106,7 @@ class Product extends ContentEntityBase implements ProductInterface {
 - Call `setDisplayConfigurable(TRUE)` on fields that site builders should be able to configure in UI.
 - Call `setTranslatable(TRUE)` on fields that should vary per language.
 - Call `setRevisionable(TRUE)` on fields that should be tracked in revisions.
-- Use `AdminHtmlRouteProvider` to auto-generate CRUD routes from the `links` annotation — avoids manual route definitions.
+- Use `AdminHtmlRouteProvider` to auto-generate CRUD routes from the `links` in the attribute — avoids manual route definitions. Entity routes stay in the route provider; do not add `#[Route]` attributes to entity forms.
 - Define `admin_permission` — the default access control handler checks it.
 - **Always provide an interface** for your entity class. Enables mocking and documents the contract.
 
@@ -211,7 +211,8 @@ $ids = \Drupal::entityTypeManager()
 ```
 
 **Rules:**
-- Always specify `->accessCheck(FALSE)` or `->accessCheck(TRUE)` explicitly — omitting it triggers a deprecation warning in Drupal 10.
+- Always specify `->accessCheck(FALSE)` or `->accessCheck(TRUE)` explicitly — omitting it throws an exception on execute.
+- Pass only the query object you built; since 11.4 the query methods no longer accept a different query object implicitly.
 - Entity queries respect the entity's access control handler when `accessCheck(TRUE)`.
 - Do not use raw SQL for entity data — use entity queries or the Storage API.
 
@@ -244,7 +245,7 @@ class ProductAccessControlHandler extends EntityAccessControlHandler {
 }
 ```
 
-Register in the entity annotation under `"handlers" → "access"`.
+Register in the entity attribute under `handlers: ['access' => ...]`.
 
 ## Programmatic Entity Access Check
 
@@ -261,7 +262,7 @@ $access = \Drupal::entityTypeManager()
   ->createAccess('product_bundle', $account, [], TRUE);
 ```
 
-## Bundle Classes (Drupal 9.3+)
+## Bundle Classes
 
 Bundle classes let you put entity-specific logic on the entity object itself:
 
@@ -278,20 +279,30 @@ class Trip extends Node {
 }
 ```
 
-Register in `hook_entity_bundle_info_alter()`:
+Register in `hook_entity_bundle_info_alter()` from a hook class:
 
 ```php
-function my_module_entity_bundle_info_alter(array &$bundles): void {
-  if (isset($bundles['node']['trip'])) {
-    $bundles['node']['trip']['class'] = Trip::class;
+// src/Hook/MyModuleEntityHooks.php
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\my_module\Entity\Trip;
+
+class MyModuleEntityHooks {
+
+  #[Hook('entity_bundle_info_alter')]
+  public function entityBundleInfoAlter(array &$bundles): void {
+    if (isset($bundles['node']['trip'])) {
+      $bundles['node']['trip']['class'] = Trip::class;
+    }
   }
+
 }
 ```
 
-Use in preprocess:
+Use in a theme's preprocess hook (`THEME/src/Hook/`):
 
 ```php
-function mytheme_preprocess_node(&$variables): void {
+#[Hook('preprocess_node')]
+public function preprocessNode(array &$variables): void {
   $node = $variables['node'];
   if ($node instanceof Trip) {
     $variables['destination'] = $node->getDestination();
@@ -301,25 +312,42 @@ function mytheme_preprocess_node(&$variables): void {
 
 ## Entity Hooks
 
+All entity hooks are `#[Hook]` methods on a class in `src/Hook/` (see `14-oop-hooks.md`):
+
 ```php
-// Before save (entity not yet in DB — can modify $entity)
-function my_module_entity_presave(EntityInterface $entity): void {}
-function my_module_node_presave(NodeInterface $node): void {}
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\node\NodeInterface;
 
-// After create
-function my_module_entity_insert(EntityInterface $entity): void {}
+class MyModuleEntityHooks {
 
-// After update
-function my_module_entity_update(EntityInterface $entity): void {}
+  // Before save (entity not yet in DB — can modify $entity)
+  #[Hook('entity_presave')]
+  public function entityPresave(EntityInterface $entity): void {}
 
-// After delete
-function my_module_entity_delete(EntityInterface $entity): void {}
+  #[Hook('node_presave')]
+  public function nodePresave(NodeInterface $node): void {}
 
-// On load (avoid heavy operations here — called for every loaded entity)
-function my_module_entity_load(array $entities, string $entity_type_id): void {}
+  // After create
+  #[Hook('entity_insert')]
+  public function entityInsert(EntityInterface $entity): void {}
+
+  // After update
+  #[Hook('entity_update')]
+  public function entityUpdate(EntityInterface $entity): void {}
+
+  // After delete
+  #[Hook('entity_delete')]
+  public function entityDelete(EntityInterface $entity): void {}
+
+  // On load (avoid heavy operations here — called for every loaded entity)
+  #[Hook('entity_load')]
+  public function entityLoad(array $entities, string $entity_type_id): void {}
+
+}
 ```
 
-Prefer the specific `ENTITY_TYPE_presave()` variants over generic `entity_presave()` for performance.
+Prefer the specific `ENTITY_TYPE_presave` variants over generic `entity_presave` for performance. Inside `entity_update` use `$entity->getOriginal()` to compare with the previous revision; the `$entity->original` property is deprecated.
 
 ## Rendering Entities
 

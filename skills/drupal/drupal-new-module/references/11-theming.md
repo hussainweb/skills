@@ -6,9 +6,12 @@
 mytheme/
 ├── mytheme.info.yml              # Required: metadata, regions, libraries, base theme
 ├── mytheme.libraries.yml         # CSS/JS asset library definitions
-├── mytheme.theme                 # PHP hooks (preprocess, suggestions, hook_theme)
 ├── mytheme.breakpoints.yml       # Responsive breakpoint definitions
-├── theme-settings.php            # Custom theme settings form additions
+├── mytheme.tokens.yml            # Design tokens (11.5+, optional)
+├── src/
+│   └── Hook/                     # #[Hook] classes: preprocess, suggestions, alters, theme settings form
+│       ├── MyThemePreprocessHooks.php
+│       └── MyThemeSettingsHooks.php
 ├── config/
 │   ├── install/mytheme.settings.yml   # Default theme setting values
 │   └── schema/mytheme.schema.yml      # Schema for theme settings
@@ -22,7 +25,7 @@ mytheme/
 ├── css/                # Source CSS/SCSS
 ├── js/                 # JavaScript files
 ├── build/              # Compiled assets (committed or gitignored based on setup)
-└── components/         # Single Directory Components (SDC, Drupal 10.1+)
+└── components/         # Single Directory Components
     └── my-component/
         ├── my-component.component.yml
         ├── my-component.html.twig
@@ -30,13 +33,15 @@ mytheme/
         └── my-component.js
 ```
 
+**No `mytheme.theme` and no `theme-settings.php`.** Both are deprecated in Drupal 11.5 and stop being autoloaded in Drupal 13. Since 11.3 themes implement hooks with the same `#[Hook]` attribute as modules, in `src/Hook/` (namespace `Drupal\mytheme\Hook`). See `14-oop-hooks.md` for the theme-specific limitations.
+
 ## theme.info.yml
 
 ```yaml
 name: My Theme
 type: theme
-base theme: starterkit_theme
-core_version_requirement: ^10
+base theme: false
+core_version_requirement: ^11.5 || ^12
 description: 'My custom theme'
 package: Custom
 
@@ -59,16 +64,24 @@ ckeditor5-stylesheets:
 
 libraries-override:
   core/normalize: false   # disable a core library
-  core/modernizr: false
 
 libraries-extend:
   user/drupal.user:
     - mytheme/user-styles   # load mytheme/user-styles whenever user/drupal.user loads
 ```
 
+**Base theme choice in Drupal 12:**
+
+| Base | Use |
+|---|---|
+| `false` + Starterkit-generated templates | Default for new front-end themes. `generate-theme` copies `starterkit_theme` into your theme, so there is no runtime base theme to keep up with. |
+| `default_admin` | Sub-theming the core admin theme (Drupal 12's default admin and front-end theme in the Standard profile). |
+| `olivero` / `claro` / `stable9` | Removed from core in 12.0. Only with the contrib project in `composer.json` (`drupal/olivero`, `drupal/claro`, `drupal/stable9`). Do not start new themes on them. |
+
 **Generating from Starterkit:**
 ```bash
-php core/scripts/drupal generate-theme mytheme --path themes/custom
+vendor/bin/dr generate-theme mytheme --path themes/custom
+# core/scripts/drupal generate-theme is deprecated since 11.4
 ```
 
 ## theme.libraries.yml
@@ -89,19 +102,28 @@ base:
     - core/drupal
     - core/once
 
+# Must load after a library it does not depend on (11.5+). Prefer this over
+# per-file weight:, which is discouraged and may be deprecated.
+print:
+  css:
+    theme:
+      build/print.css: { media: print }
+  after:
+    - mytheme/base
+
 swiper:
   remote: https://swiperjs.com
-  version: 6.8.4
+  version: 11.2.6
   license:
     name: MIT
     url: https://github.com/nolimits4web/swiper/blob/master/LICENSE
     gpl-compatible: true
   js:
-    https://unpkg.com/swiper@6.8.4/swiper-bundle.min.js:
+    https://cdn.jsdelivr.net/npm/swiper@11.2.6/swiper-bundle.min.js:
       { type: external, minified: true }
   css:
     component:
-      https://unpkg.com/swiper@6.8.4/swiper-bundle.min.css:
+      https://cdn.jsdelivr.net/npm/swiper@11.2.6/swiper-bundle.min.css:
         { type: external, minified: true }
 ```
 
@@ -122,10 +144,11 @@ js:
   js/my-script.js:
     scope: footer    # default — load before </body>
     # scope: header  # load in <head> (use only when necessary)
-    weight: -10
     attributes:
       defer: true
 ```
+
+Drupal aggregates and, when the PHP extension is available, Brotli-compresses CSS/JS in production (11.4+). Do not pre-bundle vendor code into one file "for performance"; let aggregation do it and keep libraries granular so pages only load what they attach.
 
 ## Twig Templating
 
@@ -172,75 +195,100 @@ With debug enabled, HTML comments show available template suggestions:
 2. Load the page and inspect HTML source comments
 3. Copy the active template from its current location into `themes/custom/mytheme/templates/`
 4. Rename with the more-specific suggestion you want to match
-5. Clear cache: `drush cr`
+5. Clear cache: `drush cr` (or `vendor/bin/dr cache:rebuild`)
 
 ### Adding Custom Template Suggestions
 
 ```php
-// In mytheme.theme
-function mytheme_theme_suggestions_block_alter(
-  array &$suggestions,
-  array $variables,
-): void {
-  // Add a suggestion based on block content bundle
-  if (isset($variables['elements']['content']['#block_content'])) {
-    $bundle = $variables['elements']['content']['#block_content']->bundle();
-    $suggestions[] = 'block__' . $bundle;
-  }
-}
+// src/Hook/MyThemeSuggestionsHooks.php
+namespace Drupal\mytheme\Hook;
 
-function mytheme_theme_suggestions_region_alter(
-  array &$suggestions,
-  array $variables,
-): void {
-  if (\Drupal::service('path.matcher')->isFrontPage()) {
-    $suggestions[] = 'region__' . $variables['elements']['#region'] . '__front';
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\Core\Path\PathMatcherInterface;
+
+class MyThemeSuggestionsHooks {
+
+  public function __construct(
+    private readonly PathMatcherInterface $pathMatcher,
+  ) {}
+
+  #[Hook('theme_suggestions_block_alter')]
+  public function blockSuggestions(array &$suggestions, array $variables): void {
+    if (isset($variables['elements']['content']['#block_content'])) {
+      $bundle = $variables['elements']['content']['#block_content']->bundle();
+      $suggestions[] = 'block__' . $bundle;
+    }
   }
+
+  #[Hook('theme_suggestions_region_alter')]
+  public function regionSuggestions(array &$suggestions, array $variables): void {
+    if ($this->pathMatcher->isFrontPage()) {
+      $suggestions[] = 'region__' . $variables['elements']['#region'] . '__front';
+    }
+  }
+
 }
 ```
 
-Function name: `THEMENAME_theme_suggestions_HOOKNAME_alter()`.
+Theme hook classes are autowired, so inject services instead of calling `\Drupal::service()`.
 
 ## Preprocess Functions
 
 ```php
-// In mytheme.theme
+// src/Hook/MyThemePreprocessHooks.php
+namespace Drupal\mytheme\Hook;
 
-// Add variables to all node templates
-function mytheme_preprocess_node(array &$variables): void {
-  $node = $variables['node'];
-  if ($node instanceof Trip) {
-    $variables['destination'] = $node->get('field_destination')->value;
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\my_module\Entity\Trip;
+
+class MyThemePreprocessHooks {
+
+  public function __construct(
+    private readonly ConfigFactoryInterface $configFactory,
+  ) {}
+
+  // Add variables to all node templates
+  #[Hook('preprocess_node')]
+  public function preprocessNode(array &$variables): void {
+    $node = $variables['node'];
+    if ($node instanceof Trip) {
+      $variables['destination'] = $node->getDestination();
+    }
   }
-}
 
-// Add variables to a specific region
-function mytheme_preprocess_region(array &$variables): void {
-  if ($variables['region'] === 'footer') {
-    $variables['site_name'] = \Drupal::config('system.site')->get('name');
-    $variables['copyright'] = theme_get_setting('copyright');
+  // Add variables to a specific region
+  #[Hook('preprocess_region')]
+  public function preprocessRegion(array &$variables): void {
+    if ($variables['region'] === 'footer') {
+      $variables['site_name'] = $this->configFactory->get('system.site')->get('name');
+      $variables['copyright'] = theme_get_setting('copyright');
+    }
   }
-}
 
-// Inject block content entity into block template
-function mytheme_preprocess_block(array &$variables): void {
-  if (isset($variables['elements']['content']['#block_content'])) {
-    $variables['block_content'] =
-      $variables['elements']['content']['#block_content'];
+  // Inject block content entity into block template
+  #[Hook('preprocess_block')]
+  public function preprocessBlock(array &$variables): void {
+    if (isset($variables['elements']['content']['#block_content'])) {
+      $variables['block_content'] = $variables['elements']['content']['#block_content'];
+    }
   }
-}
 
-// Pass drupalSettings from preprocess
-function mytheme_preprocess_page(array &$variables): void {
-  $variables['#attached']['drupalSettings']['mytheme']['copyright'] =
-    theme_get_setting('copyright');
+  // Pass drupalSettings from preprocess
+  #[Hook('preprocess_page')]
+  public function preprocessPage(array &$variables): void {
+    $variables['#attached']['drupalSettings']['mytheme']['copyright'] = theme_get_setting('copyright');
+  }
+
 }
 ```
 
 **Rules:**
-- Preprocess functions add display-specific variables — not business logic.
-- Use bundle classes for complex entity-specific logic instead of long preprocess functions.
-- Preprocess is per-hook; always use the most specific hook available.
+- Preprocess adds display-specific variables, not business logic.
+- Use bundle classes for complex entity-specific logic instead of long preprocess methods.
+- Preprocess is per-hook; always use the most specific hook available (`preprocess_node__article`).
+- When a variable depends on data that can change (config, another entity), apply its cacheability: `CacheableMetadata::createFromObject($config)->applyTo($variables)`.
+- `hide()`/`show()` are deprecated (11.4); set `$variables['content']['field_x']['#printed'] = TRUE` or use `|without` in Twig.
 
 ## Drupal-Specific Twig Functions and Filters
 
@@ -251,15 +299,16 @@ function mytheme_preprocess_page(array &$variables): void {
 {{ url('user.login') }}
 {{ link('Click here', url) }}
 {{ file_url(file.uri.value) }}
-{{ drupal_block('system_branding_block') }}
-{{ drupal_menu('main') }}
-{{ drupal_view('frontpage', 'block_1') }}
-{{ drupal_config('system.site', 'name') }}
-{{ drupal_entity('node', 42) }}
+{{ create_attribute({'class': ['card'], 'data-id': id}) }}
+
+{# twig/html-extra helpers (11.4+) #}
+<div class="{{ html_classes('card', {'card--featured': featured, 'card--compact': compact}) }}">
+<button {{ html_attr({'type': 'button', 'aria-expanded': 'false'}) }}>
+{% set btn = html_cva(base: 'btn', variants: {size: {sm: 'btn--sm', lg: 'btn--lg'}}) %}
+<a class="{{ btn.apply({size: size}) }}">
 
 {# Filters #}
 {{ label|t }}
-{{ label|trans }}
 {{ content|without('field_image', 'field_tags') }}
 {{ class|clean_class }}
 {{ id|clean_id }}
@@ -268,6 +317,10 @@ function mytheme_preprocess_page(array &$variables): void {
 {{ render_array|render }}
 {{ items|safe_join(', ') }}
 ```
+
+There is no `check_url` filter in core. Render link fields through their formatter, or build a `Url` object in preprocess; for a raw external string use `UrlHelper::stripDangerousProtocols()` in PHP before it reaches Twig.
+
+`drupal_block()`, `drupal_view()`, `drupal_entity()` and friends come from the contrib Twig Tweak module, not core. Prefer placing blocks and views through configuration; reach for Twig Tweak only when the layout genuinely cannot be expressed in config.
 
 ### The `|without` Filter (Critical for Cache)
 
@@ -280,28 +333,14 @@ function mytheme_preprocess_page(array &$variables): void {
 {{ content|without('field_image', 'field_tags') }}
 ```
 
-Using `|without` ensures that cache tags and contexts from excluded fields still bubble up to the parent — never manually pick fields by omission if you need correct caching.
+Using `|without` ensures that cache tags and contexts from excluded fields still bubble up to the parent. Never pick fields by omission if you need correct caching.
 
 ## JavaScript Behaviors
 
 **Never use `$(document).ready()` or `window.onload`.** Always use `Drupal.behaviors`:
 
 ```javascript
-// With jQuery
-(function ($, Drupal, once) {
-  'use strict';
-  Drupal.behaviors.myThemeBehavior = {
-    attach: function (context, settings) {
-      once('my-behavior', '.my-element', context).forEach(function (element) {
-        $(element).on('click', function () {
-          console.log(settings.mytheme.message);
-        });
-      });
-    }
-  };
-}(jQuery, Drupal, once));
-
-// Without jQuery
+// Without jQuery (preferred)
 (function (Drupal, once) {
   'use strict';
   Drupal.behaviors.myThemeBehavior = {
@@ -314,9 +353,21 @@ Using `|without` ensures that cache tags and contexts from excluded fields still
     }
   };
 })(Drupal, once);
+
+// With jQuery (only when a jQuery plugin requires it)
+(function ($, Drupal, once) {
+  'use strict';
+  Drupal.behaviors.myThemeSlider = {
+    attach(context, settings) {
+      once('my-slider', '.slider', context).forEach((element) => {
+        $(element).slick(settings.mytheme.slider);
+      });
+    }
+  };
+}(jQuery, Drupal, once));
 ```
 
-**Why `once()`:** `attach()` is called on initial page load AND after every AJAX response. `once()` ensures event listeners are attached only once per element.
+**Why `once()`:** `attach()` is called on initial page load AND after every AJAX or htmx response. `once()` ensures event listeners are attached only once per element.
 
 ### Passing Data from PHP to JavaScript
 
@@ -338,16 +389,18 @@ my-js-library:
     js/my-script.js: {}
   dependencies:
     - core/drupal      # REQUIRED for Drupal.behaviors
-    - core/jquery      # if using $
+    - core/jquery      # only if using $
     - core/once        # REQUIRED for once()
     - core/drupal.ajax # if using AJAX commands
 ```
 
-## Single Directory Components (SDC) — Drupal 10.1+
+Core still ships jQuery, but nothing in a new theme should need it. `jQuery().resetForm()` was removed in 11.5.
+
+## Single Directory Components (SDC)
 
 ```yaml
 # components/my-button/my-button.component.yml
-'$schema': 'https://git.drupalcode.org/project/drupal/-/raw/10.1.x/core/modules/sdc/src/metadata.schema.json'
+'$schema': 'https://git.drupalcode.org/project/drupal/-/raw/12.0.x/core/assets/schemas/v1/metadata.schema.json'
 name: "My Button"
 status: "stable"
 props:
@@ -358,10 +411,10 @@ props:
       title: "Label"
     variant:
       type: string
-      examples: ["primary", "secondary"]
-required:
-  - label
-  - variant
+      enum: ["primary", "secondary"]
+      default: "primary"
+  required:
+    - label
 ```
 
 ```twig
@@ -379,12 +432,48 @@ required:
 }, with_context = false) }}
 ```
 
+**Slots with expectations (12.0+):** a component can say which components a slot accepts and how many. Page builders can enforce this; templates ignore it.
+
+```yaml
+# components/accordion/accordion.component.yml
+name: Accordion
+tags: [accordion]
+slots:
+  items:
+    title: Accordion items
+    expected: ['mytheme:accordion-item']   # component IDs or tags
+    minItems: 1
+    maxItems: 10
+```
+
 **Override a module's SDC from a theme:**
 
 ```yaml
 # themes/custom/mytheme/components/my-button/my-button.component.yml
 replaces: 'my_module:my-button'
 ```
+
+`libraryOverrides:` in the component YAML declares dependencies (and, since 11.4, a `fonts:` key for preloading).
+
+## Design Tokens (11.5+)
+
+Themes and modules can declare design tokens in DTCG format in `mytheme.tokens.yml`; core turns them into CSS custom properties, and the `design_token` config entity lets sites override values per scope (`:root`, `.card`). Supported types today: dimension, fontFamily, fontWeight, number, typography.
+
+```yaml
+# mytheme.tokens.yml
+corner-radius-small:
+  $type: dimension
+  $value: { value: 4, unit: px }
+corner-radius-big:
+  $type: dimension
+  $value: { value: 12, unit: px }
+```
+
+```css
+.card { border-radius: var(--corner-radius-big); }
+```
+
+Use tokens for the values a site builder or the admin theme should be able to tune; keep one-off values in plain CSS.
 
 ## Responsive Images
 
@@ -437,26 +526,40 @@ Drupal.announce(Drupal.t('Item added to cart'));
 Drupal.announce(Drupal.t('Form error: email required'), 'assertive');
 ```
 
+Status messages use ARIA live region roles since 11.5; if your `status-messages.html.twig` override still wraps them in `role="contentinfo"`, update it.
+
 ## Theme Settings
 
+The settings form alter lives in a hook class; `theme-settings.php` is deprecated (11.5).
+
 ```php
-// theme-settings.php
-function mytheme_form_system_theme_settings_alter(
-  array &$form,
-  FormStateInterface $form_state,
-): void {
-  $form['mytheme_settings']['copyright'] = [
-    '#type'          => 'textfield',
-    '#title'         => t('Copyright text'),
-    '#default_value' => theme_get_setting('copyright'),
-    '#required'      => TRUE,
-  ];
+// src/Hook/MyThemeSettingsHooks.php
+namespace Drupal\mytheme\Hook;
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
+
+class MyThemeSettingsHooks {
+
+  use StringTranslationTrait;
+
+  #[Hook('form_system_theme_settings_alter')]
+  public function themeSettingsAlter(array &$form, FormStateInterface $form_state): void {
+    $form['mytheme_settings']['copyright'] = [
+      '#type'          => 'textfield',
+      '#title'         => $this->t('Copyright text'),
+      '#default_value' => theme_get_setting('copyright'),
+      '#required'      => TRUE,
+    ];
+  }
+
 }
 ```
 
 ```yaml
 # config/install/mytheme.settings.yml
-copyright: '© 2024 My Company'
+copyright: '© 2026 My Company'
 ```
 
 ```yaml

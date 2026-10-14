@@ -183,10 +183,11 @@ $uri = 'private://confidential/document.pdf';  // URL: /system/files/confidentia
 ### Private File Access Control
 
 ```php
-// hook_file_download() — control access to private files
-function my_module_file_download(string $uri): array|int {
-  if (strpos($uri, 'private://confidential/') === 0) {
-    if (!\Drupal::currentUser()->hasPermission('access confidential files')) {
+// src/Hook/MyModuleFileHooks.php — hook_file_download() controls access to private files
+#[Hook('file_download')]
+public function fileDownload(string $uri): array|int {
+  if (str_starts_with($uri, 'private://confidential/')) {
+    if (!$this->currentUser->hasPermission('access confidential files')) {
       return -1;  // deny
     }
     return ['Content-Type' => 'application/pdf'];  // allow
@@ -194,6 +195,8 @@ function my_module_file_download(string $uri): array|int {
   return [];  // no opinion
 }
 ```
+
+Since 12.0 dangerous characters in uploaded filenames are replaced by core; do not rely on that alone, keep validating extensions with the `FileExtension` constraint.
 
 ## Code Integrity
 
@@ -231,6 +234,24 @@ $settings['trusted_host_patterns'] = [
 
 The Drupal status page (`/admin/reports/status`) warns if this is not configured.
 
+## Hashing and Randomness
+
+Drupal 12's PHPStan configuration reports `md5()`, `sha1()`, `crc32()` and `hash()` with weak algorithms as errors, and `uniqid()` is never acceptable for tokens.
+
+```php
+use Drupal\Component\Utility\Crypt;
+
+// Cache IDs, fingerprints, deduplication — fast, non-cryptographic
+$cid = 'my_module:' . hash('xxh3', serialize($params));
+
+// Tokens, signatures, anything an attacker could guess or forge
+$token = Crypt::randomBytesBase64(32);
+$signature = Crypt::hmacBase64($data, $secret);
+$digest = Crypt::hashBase64($data);   // sha256 under the hood
+```
+
+Password hashing is argon2id by default in Drupal 12. Existing bcrypt hashes keep working and are rehashed on next login. Only set `password.algorithm: 2y` (container parameter) when the PHP build lacks argon2 support.
+
 ## Form Spam Prevention
 
 For public-facing forms:
@@ -259,12 +280,13 @@ $this->logger->error('Failed to process item @id: @message', [
   '@message' => $e->getMessage(),
 ]);
 
-// Procedural
-\Drupal::logger('my_module')->notice('...');
-
-// Exception logging
-watchdog_exception('my_module', $e);  // logs exception with full context
+// Exception logging — watchdog_exception() was removed in Drupal 11
+use Drupal\Core\Utility\Error;
+Error::logException($this->logger, $e);                       // error level, full context
+Error::logException($this->logger, $e, level: LogLevel::WARNING);
 ```
+
+Never log user-supplied values with `@` placeholders into messages that are later rendered as HTML without escaping; `@` placeholders are escaped by the logger channel, raw string concatenation is not.
 
 **Production logging:**
 - Disable `dblog` (Database Logging) module — it grows the database and slows backups.

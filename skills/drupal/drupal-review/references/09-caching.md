@@ -181,6 +181,7 @@ $cache = \Drupal::cache('bootstrap'); // bootstrap config
 $cache = \Drupal::cache('config');    // configuration
 $cache = \Drupal::cache('menu');      // menu trees
 $cache = \Drupal::cache('page');      // full page cache
+$cache = \Drupal::cache('memory');    // per-request memory bin — replaces drupal_static()
 $cache = \Drupal::cache('my_bin');    // custom bin
 
 // Read
@@ -218,6 +219,21 @@ cache.my_bin:
 $this->cache = $container->get('cache.my_bin');
 ```
 
+### Per-Request Static Caching
+
+`drupal_static()` and `drupal_static_reset()` are deprecated in 11.5. Keep per-request results in a property on the service, or in the `memory` cache bin when several services share them:
+
+```php
+// Was: $cache = &drupal_static(__FUNCTION__, []);
+$memory = \Drupal::cache('memory');          // inject 'cache.memory' in classes
+if ($item = $memory->get('my_module:labels')) {
+  return $item->data;
+}
+$memory->set('my_module:labels', $labels);
+// Was: drupal_static_reset('my_function');
+$memory->delete('my_module:labels');
+```
+
 ## Development: Disable Caching
 
 In `settings.local.php`:
@@ -242,7 +258,7 @@ parameters:
 
 ## Invalidating Plugin Caches
 
-After changing plugin annotation or YAML definitions:
+After changing plugin attributes or YAML definitions:
 
 ```php
 \Drupal::service('plugin.manager.block')->clearCachedDefinitions();

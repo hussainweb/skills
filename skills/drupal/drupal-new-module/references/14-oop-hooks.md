@@ -1,39 +1,52 @@
-# OOP Hook System (Drupal 11.1+)
+# OOP Hook System (Drupal 11.1+, the only supported style in Drupal 12+)
 
-Drupal 11.1 introduced the `#[Hook]` attribute system. Hook implementations can now be methods in PHP classes instead of magic-named procedural functions in `.module` files. This is the **recommended approach for all new hook implementations** in Drupal 11.
+Drupal 11.1 introduced the `#[Hook]` attribute. Hook implementations are methods on autowired classes in `src/Hook/` instead of magic-named functions in `.module` files. Drupal 12 is the first major that treats procedural hooks as legacy:
+
+| Version | What changed |
+|---|---|
+| 11.1 | `#[Hook]` attribute, `#[LegacyHook]` shim, auto-registration of `src/Hook/` classes |
+| 11.2 | `order:` parameter, `#[ReorderHook]`, `#[RemoveHook]`, `#[LegacyModuleImplementsAlter]`, OOP `hook_preprocess*` in modules, `hook_requirements()` replacements, `hooks_converted` renamed to `skip_procedural_hook_scan` |
+| 11.3 | Themes support `#[Hook]` in `THEME/src/Hook/`; `hook_requirements()` formally deprecated |
+| 11.4 | `dr` CLI; `#[Route]` attributes (not hooks, but the same "attributes over magic" direction) |
+| 11.5 | `.module`, `.theme` and `.profile` files deprecated (autoloading removed in 13); `#[HookDependsOnModule]`; `#[ExtensionFileIsConverted]` |
+| 12.0 | `hook_hook_info()` and `hook_module_implements_alter()` removed; procedural hooks are only collected from the main `.module`/`.theme` file, never from `.inc` files; a plugin manager must provide an attribute class |
+| 13.0 (planned) | `.module`/`.theme`/`.profile` autoloading removed; annotation discovery removed |
+
+**Standard:** every hook a module or theme implements is an `#[Hook]` method. New modules have no `.module` file at all. The only procedural code left lives in `.install` and `.post_update.php`.
 
 ## Why OOP Hooks?
 
-| Old (procedural `.module`) | New (OOP `#[Hook]`) |
+| Procedural `.module` | OOP `#[Hook]` |
 |---|---|
-| No dependency injection | Full constructor DI |
-| Global namespace functions | Organised in classes and namespaces |
-| Performance: every `.module` file scanned | Only runs registered services |
-| No ordering control | `OrderBefore`/`OrderAfter` classes |
-| One function per hook | One class, multiple methods, multiple hooks |
+| No dependency injection, `\Drupal::` everywhere | Constructor autowiring |
+| Global functions, one per hook | Classes, several implementations of one hook per module |
+| Every `.module` file scanned at container build | Only registered services |
+| Ordering via `hook_module_implements_alter()` (removed in 12) | `order:` parameter, `#[ReorderHook]`, `#[RemoveHook]` |
+| Deprecated in 11.5, autoloading removed in 13 | The only supported style going forward |
 
 ## File Location
 
-Hook classes live under `src/Hook/` and are **automatically discovered as services** — no `services.yml` entry needed:
+Classes in the `Drupal\my_module\Hook` namespace (any depth) are **discovered and registered as autowired services automatically**. No `services.yml` entry is needed; the service ID is the class name.
 
 ```
 my_module/
   src/
     Hook/
       MyModuleHooks.php       # general hooks
-      NodeHooks.php           # node-specific hooks
+      NodeHooks.php           # entity hooks
       FormHooks.php           # form alters
+      MyModuleThemeHooks.php  # hook_theme() + initial preprocess callbacks
 ```
 
-Namespace: `Drupal\my_module\Hook\MyModuleHooks`
+Split by concern rather than putting every hook in one class. A hook class with injected services that are only needed by one hook is a smell; move that hook to its own class.
 
 ## Basic Syntax
 
 ```php
 namespace Drupal\my_module\Hook;
 
-use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\node\NodeInterface;
 
 class MyModuleHooks {
@@ -43,147 +56,227 @@ class MyModuleHooks {
   ) {}
 
   #[Hook('node_presave')]
-  public function nodePressave(NodeInterface $node): void {
+  public function nodePresave(NodeInterface $node): void {
     if ($node->bundle() === 'article') {
-      // Perform pre-save logic using injected service
-      $this->entityTypeManager->getStorage('node');
+      // Pre-save logic using the injected service.
     }
   }
 
   #[Hook('cron')]
   public function cron(): void {
-    // Cron logic with injected dependencies
+    // Cron logic with injected dependencies.
   }
+
 }
 ```
 
-## Attaching Multiple Hooks to One Method
+Method names are free-form; the attribute carries the hook name. Keep the `Implements hook_NAME().` docblock line only if your tooling needs it (Rector's hook converter keys on it).
+
+## Attribute Placement
 
 ```php
-class MyModuleHooks {
-
-  #[Hook('node_insert')]
-  #[Hook('node_update')]
-  public function nodeInsertOrUpdate(NodeInterface $node): void {
-    // Called after both insert AND update
-  }
-}
-```
-
-## Placing the Attribute on a Class (Single-Hook Classes)
-
-```php
-// Option A: attribute on method (most common)
+// A: on a method (most common)
 class MyFormHooks {
   #[Hook('form_alter')]
   public function formAlter(array &$form, FormStateInterface $form_state, string $form_id): void {}
 }
 
-// Option B: attribute on class with explicit method name
+// B: on the class, naming the method
 #[Hook('form_alter', method: 'alterForms')]
 class MyFormHooks {
   public function alterForms(array &$form, FormStateInterface $form_state, string $form_id): void {}
 }
 
-// Option C: __invoke (cleanest for single-hook classes)
+// C: on an invokable class (cleanest for single-hook classes)
 #[Hook('form_alter')]
 class FormAlterHook {
   public function __invoke(array &$form, FormStateInterface $form_state, string $form_id): void {}
 }
 ```
 
+## One Method, Several Hooks; One Hook, Several Methods
+
+```php
+class MyModuleHooks {
+
+  // Same method for insert and update.
+  #[Hook('node_insert')]
+  #[Hook('node_update')]
+  public function nodeInsertOrUpdate(NodeInterface $node): void {}
+
+  // Two independent form_alter implementations in the same module, each
+  // with its own condition. Not possible with procedural hooks.
+  #[Hook('form_alter')]
+  public function hideAdminFields(array &$form, FormStateInterface $form_state, string $form_id): void {}
+
+  #[Hook('form_alter')]
+  public function attachTracking(array &$form, FormStateInterface $form_state, string $form_id): void {}
+
+}
+```
+
+Exceptions: `hook_library_info_build()`, `hook_mail()`, `hook_help()` and `hook_node_update_index()` allow only one implementation per module.
+
 ## Dependency Injection in Hook Classes
 
-Because hook classes are autowired services, standard constructor injection applies:
+Hook classes are autowired. Type-hint interfaces; use `#[Autowire]` when the type alone is ambiguous (logger channels, named cache bins, non-default services).
 
 ```php
 namespace Drupal\my_module\Hook;
 
-use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Hook\Attribute\Hook;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 class MyModuleHooks {
 
   public function __construct(
-    private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly ConfigFactoryInterface $configFactory,
     #[Autowire(service: 'logger.channel.my_module')]
     private readonly LoggerInterface $logger,
   ) {}
 
   #[Hook('entity_presave')]
-  public function entityPresave($entity): void {
-    $config = $this->configFactory->get('my_module.settings');
-    if ($config->get('auto_tag')) {
-      $this->logger->info('Auto-tagging entity @id', ['@id' => $entity->id()]);
+  public function entityPresave(EntityInterface $entity): void {
+    if ($this->configFactory->get('my_module.settings')->get('auto_tag')) {
+      $this->logger->info('Auto-tagging @type @id', [
+        '@type' => $entity->getEntityTypeId(),
+        '@id' => $entity->id(),
+      ]);
     }
   }
+
 }
 ```
 
-## Hook Ordering (Drupal 11.2+)
+Never call `\Drupal::service()` inside a hook class. If a service cannot be autowired, register the class manually in `services.yml` with explicit `arguments:`; the `#[Hook]` discovery still applies.
 
-Control the execution order of hook implementations across modules:
+## Implementing a Hook on Behalf of Another Module
+
+```php
+// Acts as if `other_module` implemented hook_node_presave().
+#[Hook('node_presave', module: 'other_module')]
+public function otherModuleNodePresave(NodeInterface $node): void {}
+```
+
+## Conditional Hooks: `#[HookDependsOnModule]` (11.5+)
+
+Register a hook (or a whole class) only when another module is installed. This replaces nullable injections plus `moduleExists()` checks, and lets you inject that module's services as required constructor properties.
+
+```php
+use Drupal\Core\Hook\Attribute\HookDependsOnModule;
+use Drupal\search\SearchIndexInterface;
+
+#[HookDependsOnModule('search')]
+class SearchHooks {
+
+  public function __construct(
+    private readonly SearchIndexInterface $searchIndex,  // required, no `?`
+  ) {}
+
+  #[Hook('cron')]
+  public function cron(): void {
+    $this->searchIndex->clear('my_module_search');
+  }
+
+}
+```
+
+Stack several attributes to require several modules. The attribute also works on a single method.
+
+## Hook Ordering (11.2+)
+
+`hook_module_implements_alter()` is **removed in Drupal 12**. Use the `order:` parameter instead:
 
 ```php
 use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\Core\Hook\Order\Order;
 use Drupal\Core\Hook\Order\OrderAfter;
 use Drupal\Core\Hook\Order\OrderBefore;
-use Drupal\Core\Hook\Order\OrderFirst;
-use Drupal\Core\Hook\Order\OrderLast;
 
 class MyModuleHooks {
 
-  // Run this form_alter after other_module's form_alter
-  #[Hook('form_alter', order: new OrderAfter(['other_module']))]
+  // Run after other_module's implementation.
+  #[Hook('form_alter', order: new OrderAfter(modules: ['other_module']))]
   public function formAlter(array &$form, FormStateInterface $form_state, string $form_id): void {}
 
-  // Run this node_presave before another_module
-  #[Hook('node_presave', order: new OrderBefore(['another_module']))]
+  // Run before a specific class method, not a whole module.
+  #[Hook('node_presave', order: new OrderBefore(classesAndMethods: [[OtherHooks::class, 'nodePresave']]))]
   public function nodePresave(NodeInterface $node): void {}
 
-  // Always run first
-  #[Hook('init', order: new OrderFirst())]
-  public function init(): void {}
+  // First / last of all implementations.
+  #[Hook('entity_bundle_info_alter', order: Order::First)]
+  public function bundleInfoAlter(array &$bundles): void {}
 
-  // Always run last
-  #[Hook('page_attachments', order: new OrderLast())]
+  #[Hook('page_attachments', order: Order::Last)]
   public function pageAttachments(array &$page): void {}
+
 }
 ```
 
-## OOP Preprocess Hooks (Drupal 11.2+)
+Default order without `order:` is module weight, then alphabetical by module name. Procedural implementations of a module run before its OOP implementations. Dynamic (runtime-computed) ordering is not supported.
 
-Preprocess functions in modules can also be OOP:
+### Reordering or Removing Another Module's Implementation
 
 ```php
-class MyModuleHooks {
+use Drupal\Core\Hook\Attribute\RemoveHook;
+use Drupal\Core\Hook\Attribute\ReorderHook;
+use Drupal\layout_builder\Hook\LayoutBuilderHooks;
 
-  // Implements hook_preprocess_node()
-  #[Hook('preprocess_node')]
-  public function preprocessNode(array &$variables): void {
-    $variables['my_extra_var'] = 'value';
+// Push layout_builder's entity_view_alter to the end.
+#[ReorderHook('entity_view_alter', class: LayoutBuilderHooks::class, method: 'entityViewAlter', order: Order::Last)]
+// Stop another module's implementation from running at all.
+#[RemoveHook('form_alter', class: OtherModuleHooks::class, method: 'formAlter')]
+class MyModuleHooks {}
+```
+
+Both attributes go on a class (anywhere in `src/Hook/`). They target OOP implementations only, so the other module must already be converted.
+
+## Preprocess and Theme Hooks in Modules (11.2+)
+
+```php
+class MyModuleThemeHooks {
+
+  #[Hook('theme')]
+  public function theme(): array {
+    return [
+      'my_module_widget' => [
+        'variables' => ['data' => NULL, 'label' => ''],
+        // Replaces template_preprocess_my_module_widget(). Any CallableResolver
+        // callable works; static::class . ':method' keeps it on this service.
+        'initial preprocess' => static::class . ':preprocessWidget',
+      ],
+    ];
   }
 
-  // Implements hook_preprocess_block__my_module_block()
+  public function preprocessWidget(array &$variables): void {
+    $variables['label'] = $variables['label'] ?: 'Widget';
+  }
+
+  // hook_preprocess_HOOK() for a theme hook another module defines.
+  #[Hook('preprocess_block')]
+  public function preprocessBlock(array &$variables): void {}
+
+  // hook_preprocess_HOOK() for a specific suggestion (double underscore).
   #[Hook('preprocess_block__my_module_block')]
-  public function preprocessMyBlock(array &$variables): void {
-    // More specific preprocess
-  }
+  public function preprocessMyBlock(array &$variables): void {}
+
 }
 ```
 
-## OOP Hooks in Themes (Drupal 11.3+)
+`hook_preprocess` and `hook_preprocess_HOOK` allow one implementation per module.
 
-Themes can also use OOP hooks with `#[Hook]`. Theme hook classes go in `THEME/src/Hook/`:
+## OOP Hooks in Themes (11.3+)
+
+Themes use the same attribute. Classes live in `THEME/src/Hook/`, namespace `Drupal\THEME\Hook`, and are autowired like module hook classes.
 
 ```php
 // themes/custom/mytheme/src/Hook/MyThemeHooks.php
 namespace Drupal\mytheme\Hook;
 
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 
 class MyThemeHooks {
@@ -197,95 +290,132 @@ class MyThemeHooks {
   public function themeSuggestionsNodeAlter(array &$suggestions, array $variables): void {
     $suggestions[] = 'node__' . $variables['elements']['#node']->bundle() . '__custom';
   }
+
+  // Replaces theme-settings.php (deprecated in 11.5).
+  #[Hook('form_system_theme_settings_alter')]
+  public function themeSettingsAlter(array &$form, FormStateInterface $form_state): void {}
+
 }
 ```
 
-Add to `mytheme.info.yml`:
-```yaml
-hooks_converted: true
-```
+Theme limitations: no `order:` or `module:` parameters, no `#[ReorderHook]`/`#[RemoveHook]`, base theme hooks run before the active theme, hooks in inactive themes never run. Themes cannot define services, so helper classes in a theme use `\Drupal::service()` or the class resolver.
 
 ## Hooks That MUST Remain Procedural
 
-The following hooks **cannot be implemented as OOP** because they run before the service container is fully available or have other bootstrap constraints:
+These run before the container exists or are tied to the install/update system. They stay in `.install` and `.post_update.php`:
 
 ```
-hook_schema()
-hook_install()
-hook_uninstall()
-hook_update_N()
-hook_post_update_NAME()
-hook_update_last_removed()
-hook_hook_info()
-hook_module_implements_alter()
-hook_install_tasks()
-hook_install_tasks_alter()
+hook_install()               hook_uninstall()
+hook_schema()                hook_update_N()
+hook_post_update_NAME()      hook_removed_post_updates()
+hook_update_last_removed()   hook_update_dependencies()
+hook_install_tasks()         hook_install_tasks_alter()   (profiles; OOP replacement pending)
 ```
 
-Additionally, **`hook_mail()`** and **`hook_help()`** cannot have multiple OOP implementations per module.
+`hook_requirements()` is deprecated (11.3). Its replacements:
 
-## Backward Compatibility Shim (Drupal 10.1–11.0)
-
-For modules needing to support both Drupal 10.1+ and 11.1+, use the `#[LegacyHook]` bridge:
+| Phase | Replacement |
+|---|---|
+| install | `src/Install/Requirements/MyModuleRequirements.php` implementing `InstallRequirementsInterface::getRequirements()` (static; runs without the full API) |
+| runtime (status report) | `#[Hook('runtime_requirements')]` and `#[Hook('runtime_requirements_alter')]` |
+| update | `#[Hook('update_requirements')]` and `#[Hook('update_requirements_alter')]` |
 
 ```php
-// src/Hook/MyModuleHooks.php — unchanged, same as above
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
 
-// my_module.module — procedural shim with #[LegacyHook]
+#[Hook('runtime_requirements')]
+public function runtimeRequirements(): array {
+  return [
+    'my_module_api' => [
+      'title' => $this->t('My Module API'),
+      'value' => $this->client->isReachable() ? $this->t('Reachable') : $this->t('Unreachable'),
+      'severity' => $this->client->isReachable() ? RequirementSeverity::OK : RequirementSeverity::Error,
+    ],
+  ];
+}
+```
+
+Severity is the `RequirementSeverity` enum (`Info`, `OK`, `Warning`, `Error`), not the old `REQUIREMENT_*` constants.
+
+## Removed in Drupal 12
+
+- `hook_hook_info()` and its `MODULE.GROUP.inc` autoloading. Move any remaining hook to a `#[Hook]` class.
+- `hook_module_implements_alter()`. Use `order:`, `#[ReorderHook]`, `#[RemoveHook]`.
+- Procedural hooks in any file other than the main `.module`/`.theme` file are **silently ignored**, even if the file is `require`d. Only `#[LegacyHook]`-marked shims may stay in include files.
+- `ModuleHandler::getHookInfo()` and `::writeCache()`.
+
+## The `.module` File Is Deprecated (11.5)
+
+Every function left in a `.module`, `.theme` or `.profile` file triggers a deprecation in 11.5, and those files stop being autoloaded in Drupal 13. Convert and then delete the file:
+
+| Was in `.module` | Goes to |
+|---|---|
+| Hook implementations | `#[Hook]` method |
+| Hook helper functions | private/protected method on the hook class, or a service |
+| Form `#submit`/`#validate` callbacks | `[$this, 'method']` or `static::class . '::method'` on a hook class or form class |
+| Batch callbacks | static methods on a dedicated class (`[MyBatch::class, 'process']`) |
+| `template_preprocess_HOOK()` | `'initial preprocess'` on the `hook_theme()` definition |
+| Public API functions other projects call | a service; keep a deprecated wrapper function only while contrib callers exist |
+
+If a `.module` file must remain for backward compatibility (dual-version contrib), add `#[ExtensionFileIsConverted]` to its first function to silence the deprecation. Only do this when the extension already works without the file on 11.3+.
+
+## Performance Flags (Only While a `.module` File Exists)
+
+Once no procedural hooks remain but the `.module` file still exists (for example because it holds `#[LegacyHook]` shims), tell the hook collector to skip scanning it. This is a **container parameter in `services.yml`**, not an `info.yml` key:
+
+```yaml
+# my_module.services.yml
+parameters:
+  my_module.skip_procedural_hook_scan: true
+```
+
+Alternatively, put `#[ProceduralHookScanStop]` on the first non-hook function in the `.module` file; scanning stops there. Do not set either while procedural hooks remain below that point; they would silently stop firing. Modules with no `.module` file need neither.
+
+(`hooks_converted` and `StopProceduralHookScan` were the 11.1 names; they were renamed in 11.2.)
+
+## Backward Compatibility Shim (Only for Contrib Supporting < 11.1)
+
+```php
+// src/Hook/MyModuleHooks.php — unchanged.
+
+// my_module.module — procedural shim.
 use Drupal\Core\Hook\Attribute\LegacyHook;
 use Drupal\my_module\Hook\MyModuleHooks;
 
-// On Drupal 11.1+, this function is SKIPPED entirely (zero overhead)
-// On Drupal 10.1–11.0, this delegates to the service
+// On 11.1+ this function is skipped entirely; on 10.1–11.0 it delegates.
 #[LegacyHook]
-function my_module_node_presave($node): void {
+function my_module_node_presave(NodeInterface $node): void {
   \Drupal::service(MyModuleHooks::class)->nodePresave($node);
 }
 ```
 
-If also registering the hook class as a service (needed for Drupal 10.x compatibility before autowire):
+On Drupal 10.x the class is not auto-registered, so also add:
 
 ```yaml
 # my_module.services.yml — only needed for Drupal 10.x compatibility
 services:
   Drupal\my_module\Hook\MyModuleHooks:
-    class: Drupal\my_module\Hook\MyModuleHooks
     autowire: true
 ```
 
-## Enabling the `hooks_converted` Performance Flag
-
-Once **every hook** in your module is implemented via `#[Hook]` classes (no remaining procedural hook functions in `.module` files), add:
-
-```yaml
-# my_module.info.yml
-hooks_converted: true
-```
-
-This tells Drupal 11.1+ to skip loading and scanning the `.module` file entirely for runtime hooks. This provides meaningful performance gains on high-traffic sites.
-
-**Do not add this flag if any procedural hooks remain in `.module`** — those would silently stop firing.
+Site-specific custom code never needs this. Drop the shims as soon as the minimum supported core is 11.1 (hooks) or 11.3 (themes, preprocess, requirements).
 
 ## Common Hook Examples
 
-### Form Alter
+### Form Alter with Submit Handler
 
 ```php
 #[Hook('form_node_article_form_alter')]
-public function formNodeArticleFormAlter(
-  array &$form,
-  FormStateInterface $form_state,
-  string $form_id,
-): void {
+public function formNodeArticleFormAlter(array &$form, FormStateInterface $form_state, string $form_id): void {
   $form['#submit'][] = [$this, 'nodeArticleSubmit'];
 }
 
 public function nodeArticleSubmit(array &$form, FormStateInterface $form_state): void {
-  // Custom submit handler (plain method — not a hook)
+  // Plain method, not a hook.
 }
 ```
 
-### Entity CRUD Hooks
+### Entity CRUD
 
 ```php
 #[Hook('node_presave')]
@@ -298,13 +428,16 @@ public function nodeInsert(NodeInterface $node): void {}
 public function entityDelete(EntityInterface $entity): void {}
 ```
 
-### Cron
+### Cron with Queue
 
 ```php
+public function __construct(
+  private readonly QueueFactory $queueFactory,
+) {}
+
 #[Hook('cron')]
 public function cron(): void {
-  $queue = \Drupal::queue('my_module_queue');
-  // Add items to queue
+  $this->queueFactory->get('my_module_queue')->createItem(['run' => time()]);
 }
 ```
 
@@ -317,16 +450,12 @@ public function pageAttachments(array &$page): void {
 }
 ```
 
-### Theme Alter
+### Query Alter by Tag
 
 ```php
-#[Hook('theme')]
-public function theme(): array {
-  return [
-    'my_module_widget' => [
-      'variables' => ['data' => NULL, 'label' => ''],
-    ],
-  ];
+#[Hook('query_my_custom_tag_alter')]
+public function queryMyCustomTagAlter(AlterableInterface $query): void {
+  $query->condition('p.status', 1);
 }
 ```
 
@@ -334,8 +463,12 @@ public function theme(): array {
 
 | Situation | Use |
 |---|---|
-| New hook in Drupal 11+ only | OOP `#[Hook]` in `src/Hook/` |
-| Dual Drupal 10.1+/11 support | OOP class + `#[LegacyHook]` procedural shim |
-| Schema, install, update hooks | Procedural in `.install` — cannot be OOP |
-| Module fully converted | Add `hooks_converted: true` to `*.info.yml` |
-| Theme hooks (D11.3+) | OOP in `themes/custom/THEME/src/Hook/` |
+| Any hook in custom code targeting 11.1+ / 12 | `#[Hook]` method in `src/Hook/`; no `.module` file |
+| Theme hooks, preprocess, suggestions, theme settings form | `#[Hook]` in `THEME/src/Hook/`; no `.theme` file |
+| Run only when another module is installed | `#[HookDependsOnModule('module')]` |
+| Ordering relative to other modules | `order: new OrderBefore()/OrderAfter()`, `Order::First`, `Order::Last` |
+| Change or remove another module's implementation | `#[ReorderHook]`, `#[RemoveHook]` |
+| Schema, install, update, post-update hooks | Procedural in `.install` / `.post_update.php` |
+| Requirements checks | `InstallRequirementsInterface` + `runtime_requirements` / `update_requirements` hooks |
+| Contrib that still supports Drupal 10.1–11.0 | `#[LegacyHook]` shim in `.module` + `#[ExtensionFileIsConverted]` |
+| `.module` still present with no procedural hooks | `MODULE.skip_procedural_hook_scan: true` parameter |

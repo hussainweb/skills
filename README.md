@@ -16,14 +16,14 @@ This downloads the skills and configures them for use with your AI agent.
 
 ### Drupal
 
-Modern Drupal development skills following Drupal 11+ and PHP 8.5 standards.
+Modern Drupal development skills following Drupal 12 (and 11.5) and PHP 8.5 standards: OOP hooks with no `.module` files, attribute-based plugins and routes, PHPUnit 12 attributes, and the Drupal 12 removals.
 
 | Skill | Install | Description |
 |-------|---------|-------------|
-| [drupal-new-module](./skills/drupal/drupal-new-module/SKILL.md) | `npx skills add hussainweb/skills@drupal-new-module` | Scaffold new Drupal 11 modules with PSR-4 namespaces, OOP hooks, and modern PHP patterns |
-| [drupal-review](./skills/drupal/drupal-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-review` | Review Drupal code against team standards, security best practices, and caching requirements |
-| [drupal-theme-review](./skills/drupal/drupal-theme-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-theme-review` | Review Drupal theme code — Twig templates, libraries, JS behaviors, SDC, accessibility, and responsive images |
-| [drupal-upgrade](./skills/drupal/drupal-upgrade/SKILL.md) | `npx skills add hussainweb/skills@drupal-upgrade` | Guide a Drupal major version upgrade end to end — readiness assessment, deprecation scanning, compatibility fixes, and upgrade planning |
+| [drupal-new-module](./skills/drupal/drupal-new-module/SKILL.md) | `npx skills add hussainweb/skills@drupal-new-module` | Scaffold new Drupal 12 modules with PSR-4 namespaces, OOP hooks, attribute routes, and modern PHP patterns |
+| [drupal-review](./skills/drupal/drupal-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-review` | Review Drupal code against team standards, Drupal 12 deprecations and removals, security best practices, and caching requirements |
+| [drupal-theme-review](./skills/drupal/drupal-theme-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-theme-review` | Review Drupal theme code — Twig templates, libraries, OOP theme hooks, JS behaviors, SDC, accessibility, and responsive images |
+| [drupal-upgrade](./skills/drupal/drupal-upgrade/SKILL.md) | `npx skills add hussainweb/skills@drupal-upgrade` | Guide a Drupal major version upgrade end to end, including 11 → 12 — readiness assessment, deprecation scanning, compatibility fixes, and upgrade planning |
 
 ### DDEV
 
