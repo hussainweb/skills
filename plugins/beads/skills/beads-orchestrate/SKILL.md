@@ -31,6 +31,11 @@ conversation is lost the moment it ends.
 - **Record first, act second.** A decision the user makes is written as a dated note on the
   bead it governs before any agent acts on it. Record it once, on the bead it belongs to,
   and point to it from everywhere else rather than restating it.
+- **Append notes, never replace them.** `bd note <id> "<text>"` appends. `bd update <id>
+  --notes "<text>"` **replaces the whole notes field**, and one agent adding a line that way
+  wiped a bead's entire hand-off history; the only way back was `bd history <id> --json`.
+  Never pass `--notes` to a bead that already has notes, and make sure no prompt you write
+  does either. `--append-notes` is the long form of `bd note`.
 - **Don't do the agents' work.** Your job is planning, relaying and checking. If you start
   implementing, nobody is orchestrating, and your context fills with file dumps.
 - **Never predict an unfinished agent's result.** If the user asks about a running agent,
@@ -55,7 +60,11 @@ conversation is lost the moment it ends.
    and the memories every session is meant to have.
 2. Read the repo's `AGENTS.md` and `CLAUDE.md` (and anything they point to). These hold the
    quality gates, commit conventions and deploy rules you will pass to agents.
-3. Read the target. For an epic, `bd show <epic>` and `bd show` each child, including
+3. Pull before trusting a listing. If the database has a Dolt remote (`bd dolt remote
+   list` shows one), run `bd dolt pull` now. A local database can lag behind the remote,
+   and then `bd list` and `bd show` report beads as missing or stale. Do not conclude a
+   bead does not exist, or that a hand-off was never written, until you have pulled.
+4. Read the target. For an epic, `bd show <epic>` and `bd show` each child, including
    notes. For a list of IDs, `bd show` each one and its parent, since the parent's notes
    often carry the decisions that govern the children. If the user named nothing, start
    from `bd ready`. Notes carry the decisions and hand-offs from earlier sessions, and they

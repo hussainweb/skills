@@ -59,4 +59,6 @@ memory behind it is a candidate for `bd remember`, once you have checked it is t
 
 Before relaying, check anything that looks off against the repo — a commit that isn't on
 the branch, a bead reported closed that `bd show` has open, CI that the report calls green
-but isn't. Tell the user what you found either way.
+but isn't, a bead whose notes are shorter than when the agent started (it used
+`bd update --notes`; recover the earlier text from `bd history <id> --json` and re-append
+it). Tell the user what you found either way.
