@@ -32,6 +32,7 @@ Rules of thumb:
 - **`${VAR:-}`** for optional values. Then make the application treat empty as absent — see §7.
 - **A literal** only when the value must not vary by environment.
 - Prefer the list form (`- KEY=${KEY:-x}`) or the mapping form consistently within a file; do not mix.
+- **Names must match `[A-Za-z_][A-Za-z0-9_.]*`** — validated since 4.4.0. A runtime-only variable with a hyphen or other character still deploys, with a warning and a suggested name; a build-time variable with an invalid name **stops the image build**.
 
 Keep `.env.example` in exact key-parity with the union of your `environment:` blocks. It is the only documentation of what the operator must set, and it is what makes the stack runnable under plain `docker compose` outside Coolify.
 
@@ -156,6 +157,7 @@ Runtime environment variables are visible to anyone who can run `docker inspect`
 ## 8. Review checklist
 
 - [ ] Every operator-tunable value uses `${VAR}` or `${VAR:-default}`
+- [ ] Every name matches `[A-Za-z_][A-Za-z0-9_.]*` (4.4.0+ rejects build-time names that do not)
 - [ ] No secret has an invented default
 - [ ] `.env.example` lists exactly the keys the compose file references
 - [ ] Secrets are not marked as build variables unless the build needs them; if it does, build secrets are enabled

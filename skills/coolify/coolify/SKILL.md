@@ -32,12 +32,12 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.3.x** (4.3.23 on 18 Sep 2026; 4.3.0 on 12 Aug 2026) |
+| Stable line at time of writing | **4.4.x** (4.4.6 on 9 Oct 2026; 4.4.0 on 6 Oct 2026). **Skip 4.4.4 and 4.4.5** — the Coolify container itself fails to start |
 | First stable 4.0.0 | 27 Apr 2026 |
 | State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405` |
-| Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional |
+| Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional (caddy-docker-proxy 2.13 since 4.4.0) |
 | Deploy endpoint | `POST /api/v1/deploy?uuid=<uuid>` |
-| Registry login the helper uses | **The SSH user's** `~/.docker/config.json` — or none, silently, if that file is missing. Long-standing, *not* new in 4.3.19 |
+| Registry login the helper uses | **The SSH user's** `~/.docker/config.json` — or none, silently, if that file is missing. Long-standing, *not* new in 4.3.19. Since **4.4.0** the server's **Registries** tab (and `POST /servers/{uuid}/registries`) writes that same file for you |
 | Domain ports | Stored separately from the domain since 4.3.15 (`domain_port_overrides`); the URL itself is portless |
 | Sentinel | **Mandatory** on regular servers since 4.3.19; the toggle is read-only in UI and API |
 

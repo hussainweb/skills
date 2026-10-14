@@ -156,7 +156,7 @@ environment:
 
 - Named volumes are renamed to `<resource-uuid>_<name>`. Do not hard-code the prefixed name anywhere.
 - The base directory inside a container is `/app` by Coolify convention; mount below it (`/app/storage`, `/app/web/sites/default/files`).
-- Bind mounts reference host paths directly. They **were** added through the UI's storage settings; **4.3.22 removed host-path configuration from the UI and the API**, and an API request carrying `host_path` is now rejected. Existing bind mounts still deploy — the column and its deploy-time use are intact — but they can no longer be created or edited that way. Bind mounts declared in your own compose file are unaffected.
+- Bind mounts reference host paths directly. They **were** added through the UI's storage settings; **4.3.22 removed host-path configuration from the UI and the API**, and an API request carrying `host_path` is now rejected. Existing bind mounts still deploy — the column and its deploy-time use are intact — but they can no longer be created or edited that way; since 4.4.0 the UI pre-fills new mounts as named volumes and shows old bind-mount paths read-only. Bind mounts declared in your own compose file are unaffected.
 - Coolify compose extensions on a volume entry:
   - `is_directory: true` — create an empty directory rather than a file.
   - `content: |` — create a file with the given inline content.
@@ -285,6 +285,8 @@ Never "fix" this by adding `ports:` to the committed file.
 ## 9. Build performance on the Coolify server
 
 Relevant only to shape A, but it is where deploy time goes.
+
+- **Up to 4.4.1 the layer cache never survived a deploy.** The helper's `--add-host` entries changed each time and invalidated it ([#11781](https://github.com/coollabsio/coolify/pull/11781), fixed in 4.4.2). Timings taken on an older version measured cold builds; re-measure on 4.4.2+ before restructuring a Dockerfile around caching.
 
 - **A multi-stage split can be net-negative.** Isolating `composer install` in its own stage to key it on `composer.json`/`composer.lock` costs a cross-stage `COPY --from` of the whole tree. Measured on a real host: **41.7s for the copy against the 14.0s install it protected** — every cold build ~42s slower to save ~12s on a warm one. Prefer a cache mount:
 
