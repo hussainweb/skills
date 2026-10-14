@@ -66,3 +66,11 @@ git status --porcelain | diff /tmp/beads-bootstrap-before -   # empty
 git config beads.role                                          # maintainer
 bd ready                                                       # runs; no warnings
 ```
+
+## B6. Audit the rest
+
+The clone has whatever the original init committed, which may be less than this skill's
+target (an init with `--skip-agents`, or one that predates the settings). Run the audit in
+`references/complete.md` from C2 onwards; on a repo this skill set up it passes and changes
+nothing, and the report says "bootstrapped". If it finds gaps, fill them as that file says,
+in a separate commit, and say so.

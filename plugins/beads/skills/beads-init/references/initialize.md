@@ -1,4 +1,5 @@
-Read this from `beads-init/SKILL.md` when the repo has no `.beads/` yet. The rules and the
+Read this from `beads-init/SKILL.md` when the repo has no `.beads/` yet (or only an empty one;
+`bd init` fills an empty directory as if it were absent). The rules and the
 settings table in SKILL.md apply throughout; the report template is there too.
 
 # Initialize a repo that has no `.beads/`
@@ -8,7 +9,7 @@ settings table in SKILL.md apply throughout; the report template is there too.
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 bd version
-test ! -e .beads && echo "no .beads: initialize"
+[ -z "$(ls -A .beads 2>/dev/null)" ] && echo "no .beads: initialize"   # anything inside means Complete or Bootstrap, see SKILL.md
 git status --porcelain          # remember this; init must not change it beyond its own files
 git log -1 --format=%s          # remember HEAD; the init commit lands on top of it
 ```
@@ -48,8 +49,8 @@ shows something new that is not ignored, stop and look before going on.
 ## A3. Apply the settings
 
 ```bash
-bd config set export.auto false            # appends to .beads/config.yaml, no trailing newline
-sed -i -e '$a\' .beads/config.yaml         # add the newline only if missing
+bd config set export.auto false            # appends "export:\n  auto: false" to .beads/config.yaml
+sed -i -e '$a\' .beads/config.yaml         # newline at EOF only if missing (bd 1.3.0 omitted it)
 
 git check-ignore -q .beads/issues.jsonl || printf '\n# JSONL exports (issues, events, interactions) are derived from Dolt, not source\n*.jsonl\n' >> .beads/.gitignore
 git check-ignore -q .beads.gate.lock     || printf '*.gate.lock*\n' >> .gitignore
@@ -108,8 +109,8 @@ Two consequences to know about, neither needing action:
 - The pointer carries no `<!-- BEGIN BEADS ... -->` marker on purpose. With a marker, bd
   treats the block as its own and a later `bd setup claude` or `bd setup codex` would
   "upgrade" it back to the long version. Without one, `bd setup <tool> --check` reports
-  "no beads section found", which is accurate and harmless; nothing runs those checks on its
-  own.
+  "exists but no beads section found", which is accurate and harmless; do not run
+  `bd setup` to satisfy it, that appends the long block next to the pointer.
 - If init ran with `--skip-agents`, there are no files to rewrite and no installed skill to
   point at, so skip this step.
 
@@ -135,7 +136,7 @@ git show --stat --format= HEAD | grep -E 'gitignore|config.yaml|AGENTS|CLAUDE'
 ## A6. Verify
 
 ```bash
-bd config get export.auto                           # false
+grep -nE '^export:' -A1 .beads/config.yaml           # export: / auto: false (bd config get prints false even when unset)
 git check-ignore -v .beads/issues.jsonl .beads/events.jsonl .beads.gate.lock .beads/dolt.gate.lock
 git config beads.role                               # the role settled in A1
 stat -c %a .beads                                   # 700

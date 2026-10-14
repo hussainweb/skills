@@ -53,5 +53,31 @@
       "leaves_cursor_rules_untouched"
     ],
     "files": []
+  },
+  {
+    "id": 5,
+    "prompt": "Set up beads here the usual way. The repo already has a .beads/ directory with its database, but there is no .agents/skills/beads/ and AGENTS.md has never been touched.",
+    "expected_output": "The agent gathers the three facts (`.beads/` present, tracked, database under `.beads/embeddeddolt/` or `.beads/dolt/`), picks the Complete mode from the decision table and reads `references/complete.md`. It does not run `bd init` in any form (no `--reinit-local`, `--force`, `--init-if-missing`) and does not run `bd setup` in a scratch or test directory. It snapshots `git status --porcelain`, runs the audit (`.beads/config.yaml` for `export:`/`auto: false`, `git check-ignore`, `git config beads.role`, `stat`, `bd hooks list`, `bd setup claude|codex|cursor --check`, grep for the pointer), keeps an already-set role or asks maintainer/contributor if unset, then runs only the `bd setup` recipes whose check failed, once each, from the repo root. It applies the missing settings with the guarded commands, strips bd's marked blocks from AGENTS.md and CLAUDE.md, replaces files bd just created with the pointer asset and appends the pointer to files that existed before, stages only the touched paths, commits them as a separate `chore(beads): complete the beads setup` commit (no amend, since there is no init commit), verifies, and reports leading with what the audit found missing. Nothing is pushed.",
+    "assertions": [
+      "identifies_the_complete_mode_from_beads_present_with_a_database_not_initialize_or_bootstrap",
+      "never_runs_bd_init_or_reinit_flags_on_a_repo_that_already_has_beads",
+      "runs_bd_setup_only_in_the_repo_root_never_in_a_scratch_or_test_directory",
+      "runs_an_audit_first_and_only_the_bd_setup_recipes_whose_check_failed_once_each",
+      "keeps_an_existing_beads_role_and_asks_only_when_it_is_unset",
+      "strips_marked_blocks_and_installs_the_pointer_without_duplicating_it",
+      "commits_the_touched_files_as_a_separate_commit_not_an_amend_and_does_not_push"
+    ],
+    "files": []
+  },
+  {
+    "id": 6,
+    "prompt": "/beads-init — this repo was set up with your skill a while ago; just make sure it is in good shape.",
+    "expected_output": "The agent picks the Complete mode, runs the audit and finds everything present: config has `export: auto: false`, the four paths are ignored, the role is set, mode is 700, hooks are installed, the skill and editor hooks are present, and AGENTS.md and CLAUDE.md carry the pointer. `bd setup claude --check` and `bd setup codex --check` say the file exists but has no beads section; the agent recognises that as the pointer, which deliberately has no marker, and does not run `bd setup claude` or `bd setup codex` again (which would append the long block beside the pointer). It changes nothing, makes no commit, and reports that the repo is already set up.",
+    "assertions": [
+      "treats_no_beads_section_found_from_setup_check_as_the_expected_pointer_state",
+      "does_not_rerun_bd_setup_on_a_recipe_whose_skill_and_hooks_are_already_installed",
+      "makes_no_changes_and_no_commit_when_the_audit_passes_and_says_already_set_up"
+    ],
+    "files": []
   }
 ]
