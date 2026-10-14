@@ -77,6 +77,8 @@ Drupal.behaviors.searchStatus = {
 
 `Drupal.announce()` is simpler for one-off announcements; a live region `<div>` is better for status text that persists.
 
+Core's `status-messages.html.twig` uses ARIA live region roles (`role="status"` / `role="alert"`) since 11.5 instead of wrapping messages in a `contentinfo` landmark. A theme override that still emits `role="contentinfo"` around messages is out of date; flag it.
+
 ## Focus Management
 
 When AJAX opens a dialog, modal, or changes the page content, move focus programmatically:

@@ -9,13 +9,25 @@
 | Functional | `BrowserTestBase` | Full Drupal install, browser emulation | Testing UI, routes, forms, access, full page rendering |
 | FunctionalJavascript | `WebDriverTestBase` | Full install + Chrome/Selenium | Testing JavaScript, AJAX, dynamic UI |
 
-**Drupal 11 requires PHPUnit 11** (Drupal 11.2+). Earlier Drupal 11.0/11.1 used PHPUnit 10.5.
-**Simpletest is removed.** Do not use it. All tests must use PHPUnit.
+**Drupal 12 requires PHPUnit 12.5.** Drupal 11.2–11.5 run PHPUnit 11. Simpletest is long gone; everything is PHPUnit.
 
-### PHPUnit 11 Key Changes
-- `setUp()` and `tearDown()` must declare `void` return type.
-- `@covers`, `@dataProvider` etc. are now native PHP attributes: `#[CoversClass(...)]`, `#[DataProvider(...)]`.
-- `$this->getMockBuilder(...)->getMock()` still works; `createMock()` is preferred.
+### PHPUnit 12 Rules That Break Old Tests
+
+- **Docblock annotations are ignored.** `@group`, `@covers`, `@dataProvider`, `@runInSeparateProcess` do nothing. A test with only annotations silently loses its group and data providers. Use `#[Group]`, `#[CoversClass]`/`#[CoversMethod]`, `#[DataProvider]`.
+- **`#[RunTestsInSeparateProcesses]` is required on every concrete Kernel, Functional and FunctionalJavascript test class** (since 11.3). Base classes can no longer force isolation through their constructor.
+- `setUp()`, `tearDown()` and all test methods declare `: void`.
+- Data provider methods are `public static`.
+- Missing native return types on methods that implement a core interface are reported as deprecations by the test runner (12.0).
+- `TestRequirementsTrait::getDrupalRoot()` is deprecated; use `$this->root`.
+- `SYMFONY_DEPRECATIONS_HELPER` no longer configures deprecation handling; configure the `DeprecationHandler` extension in `phpunit.xml` instead (see below).
+
+Core ships two PHPStan rules that find leftover annotations. Add them to the project `phpstan.neon`:
+
+```neon
+rules:
+  - Drupal\PHPStan\Rules\TestClassClassMetadata
+  - Drupal\PHPStan\Rules\TestClassMethodMetadata
+```
 
 ## Test File Locations and Namespaces
 
@@ -30,11 +42,14 @@ tests/modules/                      → helper test-only modules
 ## Unit Test
 
 ```php
+declare(strict_types=1);
+
 namespace Drupal\Tests\my_module\Unit;
 
-use Drupal\Tests\UnitTestCase;
 use Drupal\my_module\Calculator;
+use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -42,31 +57,40 @@ use PHPUnit\Framework\Attributes\Group;
  */
 #[CoversClass(Calculator::class)]
 #[Group('my_module')]
-class CalculatorTest extends UnitTestCase {
+final class CalculatorTest extends UnitTestCase {
 
   protected Calculator $calculator;
 
-  // PHPUnit 11: void return type required
   protected function setUp(): void {
     parent::setUp();
     $this->calculator = new Calculator(10, 5);
   }
 
   public function testAdd(): void {
-    $this->assertEquals(15, $this->calculator->add());
+    $this->assertSame(15, $this->calculator->add());
   }
 
-  public function testSubtract(): void {
-    $this->assertEquals(5, $this->calculator->subtract());
+  #[DataProvider('providerSubtract')]
+  public function testSubtract(int $a, int $b, int $expected): void {
+    $this->assertSame($expected, (new Calculator($a, $b))->subtract());
   }
+
+  public static function providerSubtract(): array {
+    return [
+      'positive' => [10, 5, 5],
+      'negative' => [5, 10, -5],
+    ];
+  }
+
 }
 ```
 
 **Rules:**
-- Use `#[Group('my_module')]` PHP attribute (PHPUnit 11) or `@group my_module` docblock annotation — both work, PHP attributes are preferred in new tests.
-- `#[CoversClass(MyClass::class)]` replaces `@covers` annotations.
-- `setUp(): void` — the `void` return type is now required by PHPUnit 11.
-- Call `parent::setUp()` first in every `setUp()` method.
+- `#[Group('my_module')]` on every test class. Without it the test does not run in core's group-based CI runners.
+- `#[CoversClass(MyClass::class)]` for coverage; `#[CoversMethod]` for a single method.
+- `#[DataProvider('method')]` with a `public static` provider; prefer named data sets.
+- Call `parent::setUp()` first in every `setUp()`.
+- Prefer `assertSame()` over `assertEquals()`.
 
 ## Mocking
 
@@ -78,9 +102,7 @@ $config_factory->method('get')
   ->willReturn($this->createMock(ImmutableConfig::class));
 
 // Mock a Drupal entity
-$user = $this->getMockBuilder(UserInterface::class)
-  ->disableOriginalConstructor()
-  ->getMock();
+$user = $this->createMock(UserInterface::class);
 $user->method('getDisplayName')->willReturn('Test User');
 $user->method('hasPermission')
   ->with('administer content')
@@ -90,19 +112,25 @@ $user->method('hasPermission')
 $service = new MyService($config_factory);
 ```
 
+`createMock()` is preferred. `getMockBuilder()` is only needed for partial mocks (`onlyMethods()`). Prophecy still works through `phpspec/prophecy-phpunit` but new tests should use PHPUnit's own mocks.
+
 ## Kernel Test
 
 ```php
+declare(strict_types=1);
+
 namespace Drupal\Tests\my_module\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the queue worker processes items correctly.
- *
- * @group my_module
  */
-class TeamCleanerTest extends KernelTestBase {
+#[Group('my_module')]
+#[RunTestsInSeparateProcesses]
+final class TeamCleanerTest extends KernelTestBase {
 
   protected static $modules = ['my_module', 'system', 'user'];
 
@@ -121,63 +149,103 @@ class TeamCleanerTest extends KernelTestBase {
       ->get('plugin.manager.queue_worker')
       ->createInstance('my_module_cleaner');
 
-    $item = (object)['id' => 1];
-    $worker->processItem($item);
+    $worker->processItem((object) ['id' => 1]);
 
     $count = $database->select('my_module_teams', 't')
       ->countQuery()
       ->execute()
       ->fetchField();
-    $this->assertEquals(0, $count);
+    $this->assertSame(0, (int) $count);
   }
+
 }
 ```
 
 **Available setup methods:**
-- `installSchema('module', ['table'])` — install a non-entity DB table
-- `installEntitySchema('entity_type')` — install entity storage tables
-- `installConfig(['module'])` — import default config from `config/install/`
-- `installModules(['module'])` — install additional modules
+- `installSchema('module', ['table'])` installs a non-entity DB table
+- `installEntitySchema('entity_type')` installs entity storage tables
+- `installConfig(['module'])` imports default config from `config/install/`
+- `installModules(['module'])` installs additional modules
+
+### Shared Environment (12.0+, Optional; Default in 13)
+
+`#[ShareEnvironment]` builds the database once per test class instead of once per method. Schema and config installation move to `setUpEnvironment()`; per-method state stays in `setUp()`; `resetEnvironment()` undoes anything a method changed. Opt in for slow kernel tests whose methods do not depend on a pristine database:
+
+```php
+use Drupal\TestTools\Attribute\ShareEnvironment;
+
+#[Group('my_module')]
+#[RunTestsInSeparateProcesses]
+#[ShareEnvironment]
+final class MyKernelTest extends KernelTestBase {
+
+  protected static $modules = ['node'];
+
+  protected function setUpEnvironment(): void {
+    parent::setUpEnvironment();
+    $this->installEntitySchema('node');
+    $this->installConfig(['node']);
+  }
+
+  protected function setUp(): void {
+    parent::setUp();
+    $this->nodeStorage = $this->container->get('entity_type.manager')->getStorage('node');
+  }
+
+  public function testNodeIsSaved(): void {
+    $node = $this->nodeStorage->create(['type' => 'page', 'title' => 'Test']);
+    $node->save();
+    // Never assert absolute IDs or row counts in a shared environment.
+    $this->assertNotNull($this->nodeStorage->load($node->id()));
+  }
+
+}
+```
+
+Rules for shared environments: methods must be order-independent, never assert absolute IDs, never drop tables you did not create, enable modules through `$modules` only, and do not call `$this->container->set()` outside `register()` / `setUp()`. Use `#[ShareEnvironment(FALSE)]` on a class or method that needs its own database. Drupal 13 plans to make sharing the default, so write new kernel tests to these rules now.
+
+### Routes in Kernel Tests (11.5+)
+
+A kernel test class can declare routes it needs with `#[Route]` attributes on the test class instead of shipping a helper module.
 
 ## Functional Test
 
 ```php
+declare(strict_types=1);
+
 namespace Drupal\Tests\my_module\Functional;
 
 use Drupal\Tests\BrowserTestBase;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the My Module admin pages.
- *
- * @group my_module
  */
-class AdminPageTest extends BrowserTestBase {
+#[Group('my_module')]
+#[RunTestsInSeparateProcesses]
+final class AdminPageTest extends BrowserTestBase {
 
   protected static $modules = ['my_module'];
 
-  protected $defaultTheme = 'stark';  // required in Drupal 9+
+  protected $defaultTheme = 'stark';
 
   public function testSettingsPage(): void {
-    // Test anonymous access is denied
+    // Anonymous access is denied.
     $this->drupalGet('/admin/config/system/my-module');
     $this->assertSession()->statusCodeEquals(403);
 
-    // Create a user with the required permission
     $admin = $this->drupalCreateUser(['administer my module']);
     $this->drupalLogin($admin);
 
-    // Test the settings page is accessible
     $this->drupalGet('/admin/config/system/my-module');
     $this->assertSession()->statusCodeEquals(200);
     $this->assertSession()->pageTextContains('My Module Settings');
 
-    // Submit the form
     $this->submitForm(['salutation' => 'Good morning'], 'Save configuration');
     $this->assertSession()->pageTextContains('The configuration options have been saved.');
 
-    // Verify the config was saved
-    $config = $this->config('my_module.settings');
-    $this->assertEquals('Good morning', $config->get('salutation'));
+    $this->assertSame('Good morning', $this->config('my_module.settings')->get('salutation'));
   }
 
   public function testContentPage(): void {
@@ -186,8 +254,11 @@ class AdminPageTest extends BrowserTestBase {
     $this->assertSession()->elementExists('css', '.my-module-content');
     $this->assertSession()->elementTextContains('css', 'h1', 'My Page');
   }
+
 }
 ```
+
+Functional tests install the `testing` profile, which has no content types, no page cache and no dynamic page cache (12.0). Create what you need: `$this->drupalCreateContentType(['type' => 'article'])` before `drupalCreateNode(['type' => 'article'])`. Do not rely on the Standard profile's Article/Page types; they were removed from Standard in 11.4 anyway.
 
 ### Common Assertions
 
@@ -213,6 +284,7 @@ $admin = $this->drupalCreateUser(['permission one', 'permission two']);
 $this->drupalLogin($admin);
 $this->drupalLogout();
 
+$this->drupalCreateContentType(['type' => 'article', 'name' => 'Article']);
 $node = $this->drupalCreateNode(['type' => 'article', 'title' => 'Test']);
 
 // Follow a link
@@ -226,16 +298,20 @@ $this->submitForm(['edit-title-0-value' => 'New Title'], 'Save');
 ## FunctionalJavascript Test
 
 ```php
+declare(strict_types=1);
+
 namespace Drupal\Tests\my_module\FunctionalJavascript;
 
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests AJAX form behavior.
- *
- * @group my_module
  */
-class AjaxFormTest extends WebDriverTestBase {
+#[Group('my_module')]
+#[RunTestsInSeparateProcesses]
+final class AjaxFormTest extends WebDriverTestBase {
 
   protected static $modules = ['my_module'];
   protected $defaultTheme = 'stark';
@@ -259,19 +335,30 @@ class AjaxFormTest extends WebDriverTestBase {
 
     // Test machine name auto-generation
     $page->fillField('edit-label', 'My Test Item');
-    $this->assertJsCondition('jQuery(".machine-name-value").html() == "my_test_item"');
-
-    // Screenshot for debugging
-    // $this->createScreenshot('/tmp/test-screenshot.png');
+    $this->assertJsCondition('document.querySelector(".machine-name-value").textContent === "my_test_item"');
   }
+
 }
 ```
 
 **FunctionalJavascript-specific methods:**
-- `$this->assertSession()->assertWaitOnAjaxRequest()` — wait for pending AJAX
-- `$this->assertJsCondition('js expression')` — wait until JS expression is truthy
-- `$page->attachFileToField('edit-file', '/absolute/path/to/file.csv')` — file upload
-- `$this->createScreenshot('/tmp/screenshot.png')` — capture screenshot for debugging
+- `$this->assertSession()->assertWaitOnAjaxRequest()` waits for pending AJAX
+- `$this->assertJsCondition('js expression')` waits until the JS expression is truthy
+- `$page->attachFileToField('edit-file', '/absolute/path/to/file.csv')` uploads a file
+- `$this->createScreenshot('/tmp/screenshot.png')` captures a screenshot for debugging
+
+HTML5 client-side validation is disabled by default in Drupal 12, so a form with a `required` field submits to the server and the test sees Drupal's validation message, not a browser tooltip. Tests that passed on 11.x by relying on the browser blocking submission need updating.
+
+## Skipping Tests (11.5+)
+
+```php
+use Drupal\TestTools\Attribute\Skip;
+
+#[Skip('Blocked on https://www.drupal.org/i/1234567')]
+public function testSomethingBroken(): void {}
+```
+
+Prefer this over `markTestSkipped()` inside the method body; the attribute is visible in listings and static analysis.
 
 ## Running Tests
 
@@ -291,9 +378,11 @@ vendor/bin/phpunit --group=my_module
 # Run by filter (method name)
 vendor/bin/phpunit --filter=testAdd
 
-# Run with verbose output
-vendor/bin/phpunit --verbose modules/custom/my_module/tests
+# Debug output
+vendor/bin/phpunit --debug modules/custom/my_module/tests
 ```
+
+Packaged Drupal 12 core releases no longer ship core's own test suites, so install `drupal/core-dev` (which provides PHPUnit, Mink and the test base classes' dependencies) as a dev dependency in every project that runs tests.
 
 ### Required Environment Variables
 
@@ -311,12 +400,22 @@ export MINK_DRIVER_ARGS_WEBDRIVER='["chrome", {"browserName": "chrome", "goog:ch
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit bootstrap="core/tests/bootstrap.php">
+<phpunit bootstrap="core/tests/bootstrap.php"
+         failOnDeprecation="false"
+         displayDetailsOnTestsThatTriggerDeprecations="true">
   <php>
     <env name="SIMPLETEST_DB" value="mysql://drupal:drupal@127.0.0.1/drupal"/>
     <env name="SIMPLETEST_BASE_URL" value="http://localhost"/>
     <env name="BROWSERTEST_OUTPUT_DIRECTORY" value="/tmp/phpunit-browser-output"/>
   </php>
+  <extensions>
+    <!-- Replaces SYMFONY_DEPRECATIONS_HELPER (deprecated in 11.5). -->
+    <bootstrap class="Drupal\TestTools\Extension\DeprecationBridge\DeprecationHandler">
+      <parameter name="enableProjectIgnores" value="true"/>
+      <parameter name="projectIgnoreFile" value=".deprecation-ignore.txt"/>
+      <parameter name="enableDebugClassLoader" value="true"/>
+    </bootstrap>
+  </extensions>
   <testsuites>
     <testsuite name="unit">
       <directory>modules/custom/*/tests/src/Unit</directory>
@@ -331,6 +430,8 @@ export MINK_DRIVER_ARGS_WEBDRIVER='["chrome", {"browserName": "chrome", "goog:ch
 </phpunit>
 ```
 
+Override the handler per run with `DRUPAL_DEPRECATION_FILTER_CONFIG='{"enableDebugClassLoader":false}'`. Fail CI on deprecations from your own code; ignore third-party ones through the ignore file, never by disabling the handler.
+
 ## Test Helper Modules
 
 For tests that need specific content types, fields, or configuration, create a minimal helper module in `tests/modules/`:
@@ -339,7 +440,7 @@ For tests that need specific content types, fields, or configuration, create a m
 tests/modules/my_module_test/
 ├── my_module_test.info.yml
 ├── config/install/    # Test-specific configuration
-└── src/               # Test-specific classes
+└── src/               # Test-specific classes (hooks go in src/Hook/, same as any module)
 ```
 
 Reference in test:
@@ -347,3 +448,5 @@ Reference in test:
 ```php
 protected static $modules = ['my_module', 'my_module_test'];
 ```
+
+Test helper modules follow the same rules as real modules: no `.module` file, hooks in `src/Hook/`.

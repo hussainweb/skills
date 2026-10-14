@@ -1,12 +1,12 @@
-# Modern PHP (8.1–8.5) in Drupal 11
+# Modern PHP (8.1–8.5) in Drupal 12
 
-Drupal 11 requires PHP 8.4 minimum. PHP 8.5 is recommended. Use modern PHP features consistently — they are not optional style preferences, they are the current coding standard in Drupal core and contrib.
+Drupal 12 requires PHP 8.5.0; Drupal 11.x runs on 8.3+. Write every new line for 8.5 and use modern PHP features consistently. They are not optional style preferences, they are the current coding standard in Drupal core and contrib. Start each file with `declare(strict_types=1);`.
 
 ---
 
 ## Constructor Property Promotion (PHP 8.0+)
 
-**The standard pattern for all injectable classes in Drupal 11.** Eliminates separate property declarations and `$this->x = $x` boilerplate.
+**The standard pattern for all injectable classes.** Eliminates separate property declarations and `$this->x = $x` boilerplate.
 
 ```php
 // OLD — Drupal 8/9 style (do not write new code this way)
@@ -23,7 +23,7 @@ class MyService {
   }
 }
 
-// NEW — Drupal 11 standard
+// NEW — current standard
 class MyService {
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
@@ -65,7 +65,7 @@ readonly class NodeData {
 
 ## PHP Native Attributes (PHP 8.0+)
 
-Used for **all plugin discovery** and **hook registration** in Drupal 11. See [03-plugins.md](03-plugins.md) and [14-oop-hooks.md](14-oop-hooks.md) for full examples.
+Used for **plugin discovery**, **hook registration**, **routes**, **CLI commands** and **test metadata**. Drupal 12 requires an attribute class for every plugin type and PHPUnit 12 ignores docblock annotations entirely. See [03-plugins.md](03-plugins.md), [05-routing-access.md](05-routing-access.md), [12-testing.md](12-testing.md) and [14-oop-hooks.md](14-oop-hooks.md) for full examples.
 
 ```php
 // Plugin attribute
@@ -79,7 +79,15 @@ class MyBlock extends BlockBase {}
 #[Hook('node_presave')]
 public function nodePresave(NodeInterface $node): void {}
 
-// PHPUnit test attributes
+// Route attribute (11.4+; title: since 11.5)
+#[Route(path: '/example', name: 'my_module.example', title: new TranslatableMarkup('Example'), requirements: ['_permission' => 'access content'])]
+public function page(): array {}
+
+// Core CLI command (11.4+)
+#[AsCommand(name: 'my-module:sync', description: 'Sync remote data.')]
+class SyncCommand {}
+
+// PHPUnit test attributes (required with PHPUnit 12)
 #[CoversClass(MyService::class)]
 #[Group('my_module')]
 class MyServiceTest extends UnitTestCase {}
@@ -224,7 +232,7 @@ $form['#validate'][] = $this->validate(...);
 
 ## PHP 8.4: New Array Functions
 
-Drupal 11.1+ recommends PHP 8.4. These functions replace verbose `array_filter` + `array_values` patterns:
+Available on every supported Drupal 12 platform. These functions replace verbose `array_filter` + `array_values` patterns:
 
 ```php
 // array_find — first element matching predicate (returns element, not key)
@@ -247,7 +255,7 @@ $allPublished = array_all($nodes, fn($node) => $node->isPublished());
 
 ## PHP 8.4: Property Hooks
 
-Property hooks allow computed get/set logic on class properties without wrapping in methods. Not yet used in Drupal core (as of 11.x) but supported in PHP 8.4 and relevant for custom entity or value object code:
+Property hooks allow computed get/set logic on class properties without wrapping in methods. Core barely uses them yet, but they are fine in custom value objects and DTOs. Do not use them on entity classes or plugins: those rely on magic `__get`/`__set` and typed-data wrappers that property hooks bypass.
 
 ```php
 class Product {
@@ -341,13 +349,13 @@ $entity = $storage->load(reset($ids));  // reset() moves internal pointer — av
 
 ## Fibers (PHP 8.1) — Drupal Internal
 
-Drupal 11.3 uses PHP Fibers inside the render pipeline (BigPipe) to process placeholders concurrently, yielding a 31–62% reduction in DB queries on cold cache. This is internal to core — custom code does not need to use Fibers directly, but **enabling BigPipe on your site will automatically benefit** from this improvement.
+Since Drupal 11.3 the render pipeline (BigPipe) uses PHP Fibers to process placeholders concurrently, which is where most of the 11.3 performance gains came from. This is internal to core; custom code does not need to use Fibers directly, but **enabling BigPipe on your site will automatically benefit**. Lazy builders and placeholders in custom code benefit too, which is one more reason to prefer them over `max-age: 0`.
 
 ---
 
-## Type Declaration Completeness (Drupal 11 Standard)
+## Type Declaration Completeness (Drupal 12 Standard)
 
-Drupal 11 and its coding standards expect full type declarations on all new code:
+Full type declarations are required on all new code. Drupal 12's test runner reports a deprecation whenever a method that implements a core interface or overrides a core method lacks a native return type, so untyped methods now show up in CI:
 
 ```php
 // All parameters, return types, and properties typed
@@ -381,6 +389,8 @@ public function fail(): never {
 | Injecting services into a class | Constructor property promotion + `readonly` |
 | Plugin metadata | PHP `#[Attribute]` classes (not Doctrine `@Annotation`) |
 | Hook implementations | `#[Hook]` in `src/Hook/` classes |
+| Routes | `#[Route]` on controllers and forms, or `*.routing.yml` |
+| CLI commands | `#[AsCommand]` invokable class in `src/Command/` |
 | Fixed set of allowed values | PHP `enum` |
 | Simple branching on a value | `match` expression |
 | Multiple optional args | Named arguments |
@@ -389,4 +399,4 @@ public function fail(): never {
 | First/last element of array | `array_first()` / `array_last()` (PHP 8.5) |
 | Mark symbol as deprecated | `#[Deprecated(...)]` attribute (PHP 8.5) |
 | Value object / DTO | `readonly class` (PHP 8.2) |
-| Testing coverage annotation | `#[CoversClass(...)]` attribute (PHPUnit 11) |
+| Testing coverage annotation | `#[CoversClass(...)]` attribute (PHPUnit 12; docblock `@covers` is ignored) |

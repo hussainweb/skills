@@ -107,7 +107,7 @@ class SettingsForm extends ConfigFormBase {
 | `textfield` | Single-line text input |
 | `textarea` | Multi-line text |
 | `password` | Password field (not stored in form state) |
-| `email` | Email input with HTML5 validation |
+| `email` | Email input (`type="email"`); server-side validation still applies |
 | `number` | Numeric input |
 | `url` | URL input |
 | `select` | Dropdown (`#options` array required) |
@@ -135,6 +135,7 @@ class SettingsForm extends ConfigFormBase {
 - Use `$form_state->setError($form['element'], $message)` for nested elements.
 - If any `setError*()` is called, `submitForm()` is not executed.
 - For field-level validation in entity forms, implement `#element_validate` callbacks or constraints.
+- **Never rely on HTML5 client-side validation** (`#required`, `#pattern`, `type="number"`). Drupal 12 disables it by default (`$settings['enable_html5_validation'] = FALSE`; the setting disappears in 13), so the browser no longer blocks submission. Every rule must be enforced in `validateForm()` or a constraint.
 
 ## AJAX Forms
 
@@ -205,9 +206,10 @@ $form['file'] = [
   '#type'              => 'managed_file',
   '#title'             => $this->t('CSV file'),
   '#upload_location'   => 'public://imports/',
+  // Constraint plugin IDs; the file_validate_*() callbacks were removed in 11.
   '#upload_validators' => [
-    'file_validate_extensions' => ['csv'],
-    'file_validate_size'       => [25 * 1024 * 1024], // 25MB
+    'FileExtension' => ['extensions' => 'csv'],
+    'FileSizeLimit' => ['fileLimit' => 25 * 1024 * 1024], // 25MB
   ],
   '#default_value'     => $this->configuration['file_fid'] ? [$this->configuration['file_fid']] : [],
 ];
@@ -223,29 +225,44 @@ if ($fid) {
 
 ## Altering Another Module's Form
 
+Form alters are `#[Hook]` methods (see `14-oop-hooks.md`). Submit and validate callbacks point at methods on the same class; the hook class is a service, so `[$this, 'method']` is a valid, serialisable callable.
+
 ```php
-// my_module.module
+// src/Hook/MyModuleFormHooks.php
+namespace Drupal\my_module\Hook;
 
-// Alter a specific form by its form ID
-function my_module_form_node_article_form_alter(
-  array &$form,
-  FormStateInterface $form_state,
-  string $form_id,
-): void {
-  // Add a custom submit handler
-  $form['actions']['submit']['#submit'][] = 'my_module_node_article_submit';
-  // Add a custom validator
-  $form['#validate'][] = 'my_module_node_article_validate';
-}
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\Core\Session\AccountProxyInterface;
 
-function my_module_node_article_submit(array &$form, FormStateInterface $form_state): void {
-  // Additional processing after the entity is saved.
+class MyModuleFormHooks {
+
+  public function __construct(
+    private readonly AccountProxyInterface $currentUser,
+  ) {}
+
+  // hook_form_FORM_ID_alter() — preferred over the generic form_alter.
+  #[Hook('form_node_article_form_alter')]
+  public function nodeArticleFormAlter(array &$form, FormStateInterface $form_state, string $form_id): void {
+    $form['field_internal_notes']['#access'] = $this->currentUser->hasPermission('administer nodes');
+    $form['actions']['submit']['#submit'][] = [$this, 'nodeArticleSubmit'];
+    $form['#validate'][] = [$this, 'nodeArticleValidate'];
+  }
+
+  public function nodeArticleValidate(array &$form, FormStateInterface $form_state): void {}
+
+  public function nodeArticleSubmit(array &$form, FormStateInterface $form_state): void {
+    // Additional processing after the entity is saved.
+  }
+
 }
 ```
 
-Use `hook_form_FORM_ID_alter()` for specific forms (preferred) or `hook_form_alter()` for all forms.
+Several `form_alter` implementations per module are allowed; split by concern instead of one giant method with `if ($form_id === ...)` chains.
 
 ## Form Routing
+
+Either in `*.routing.yml`:
 
 ```yaml
 my_module.settings:
@@ -255,6 +272,20 @@ my_module.settings:
     _title: 'My Module Settings'
   requirements:
     _permission: 'administer site configuration'
+```
+
+Or (11.5+) as a class-level attribute on the form, which must live in the module's `Form` namespace:
+
+```php
+use Drupal\Core\Routing\Attribute\Route;
+
+#[Route(
+  path: '/admin/config/system/my-module',
+  name: 'my_module.settings',
+  title: new TranslatableMarkup('My Module Settings'),
+  requirements: ['_permission' => 'administer site configuration'],
+)]
+class SettingsForm extends ConfigFormBase {}
 ```
 
 ## Key Rules Summary

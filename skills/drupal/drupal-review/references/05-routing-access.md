@@ -67,6 +67,71 @@ my_module.public:
 - Use `_csrf_token: 'TRUE'` on any state-changing route accessed via a link (not a form submit).
 - Use `_entity_access: 'entity_type.operation'` rather than `_permission` when the access depends on the entity.
 
+## Route Attributes (11.4+)
+
+Controllers in a module's `Controller` namespace and forms in its `Form` namespace can declare routes with `#[Route]` attributes instead of (or alongside) `*.routing.yml`. Use `Drupal\Core\Routing\Attribute\Route`, which extends Symfony's attribute and adds a top-level `title:` (11.5+). Property names match the YAML keys.
+
+```php
+namespace Drupal\my_module\Controller;
+
+use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\Routing\Attribute\Route;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\my_module\Entity\ProductInterface;
+
+#[Route(name: 'my_module.', path: '/my-module')]   // class-level prefix for name and path
+class ProductController extends ControllerBase {
+
+  #[Route(
+    path: '/products',
+    name: 'products',                                 // → my_module.products
+    title: new TranslatableMarkup('Products'),
+    requirements: ['_permission' => 'access content'],
+  )]
+  public function list(): array {
+    return ['#theme' => 'my_module_product_list'];
+  }
+
+  #[Route(
+    path: '/product/{product}',
+    name: 'product_view',
+    // Static closure titles need PHP 8.5; arguments resolve like _title_callback.
+    title: static fn (ProductInterface $product) => $product->label(),
+    requirements: ['_entity_access' => 'product.view'],
+    options: ['parameters' => ['product' => ['type' => 'entity:product']]],
+  )]
+  public function view(ProductInterface $product): array {
+    return $this->entityTypeManager()->getViewBuilder('product')->view($product);
+  }
+
+}
+```
+
+```php
+namespace Drupal\my_module\Form;
+
+use Drupal\Core\Form\ConfigFormBase;
+use Drupal\Core\Routing\Attribute\Route;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+
+// On forms the attribute goes on the class; method-level attributes are ignored.
+#[Route(
+  path: '/admin/config/my-module/settings',
+  name: 'my_module.settings',
+  title: new TranslatableMarkup('My Module Settings'),
+  requirements: ['_permission' => 'administer site configuration'],
+)]
+class SettingsForm extends ConfigFormBase {}
+```
+
+**Rules:**
+- Class-level `name`/`path` are prefixes; `defaults`, `requirements` and `options` merge with method-level values winning.
+- A class with a single `__invoke()` can carry the whole route on the class.
+- Title closures run without the container; use `_title_callback` in `defaults` when the title needs a service.
+- Entity CRUD routes still come from the entity type's route provider, not attributes.
+- YAML and attributes coexist. Pick one per module for consistency; do not define the same route in both.
+- Attributes do not remove the need for `requirements:`. A route without requirements is still inaccessible.
+
 ## Multiple Permission Requirements
 
 ```yaml
@@ -163,13 +228,15 @@ requirements:
   _my_module_access_check: 'TRUE'
 ```
 
-## Route Alteration (Event Subscriber)
+## Route Alteration and Dynamic Routes (Event Subscriber)
 
 ```php
 use Drupal\Core\Routing\RouteSubscriberBase;
+use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
 class MyRouteSubscriber extends RouteSubscriberBase {
+
   protected function alterRoutes(RouteCollection $collection): void {
     // Disable user registration
     if ($route = $collection->get('user.register')) {
@@ -180,10 +247,20 @@ class MyRouteSubscriber extends RouteSubscriberBase {
       $route->setRequirement('_permission', 'my permission');
     }
   }
+
+  // 11.5+: the same subscriber can define routes, e.g. one per config entity.
+  protected function routes(RouteCollection $collection): void {
+    $collection->add('my_module.dynamic', new Route(
+      '/dynamic/{id}',
+      ['_controller' => '\Drupal\my_module\Controller\DynamicController::page'],
+      ['_permission' => 'access content'],
+    ));
+  }
+
 }
 ```
 
-Service: `tags: [{name: event_subscriber}]`
+Service: `tags: [{name: event_subscriber}]`. Use dynamic routes only when the set of routes depends on data; static routes belong in YAML or attributes.
 
 ## Programmatic Access Check
 

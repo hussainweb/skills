@@ -55,7 +55,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 class MyController extends ControllerBase {
 
-  // PHP 8.1+ constructor property promotion with readonly — the standard in Drupal 11
+  // Constructor property promotion with readonly — the standard
   public function __construct(
     protected readonly MyService $myService,
     protected readonly ConfigFactoryInterface $configFactory,
@@ -128,18 +128,46 @@ class MyModuleSalutation {
 }
 ```
 
+### Autowiring
+
+Hook classes (`src/Hook/`) and `dr` commands (`src/Command/`) are discovered and autowired with no `services.yml` entry. Any other service can opt in with `autowire: true`; then constructor parameters are resolved by interface. Use `#[Autowire]` when the interface alone is ambiguous:
+
+```yaml
+services:
+  Drupal\my_module\MyModuleSalutation:
+    autowire: true
+```
+
+```php
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+
+public function __construct(
+  private readonly ConfigFactoryInterface $configFactory,            // resolved by interface alias
+  #[Autowire(service: 'logger.channel.my_module')]
+  private readonly LoggerInterface $logger,                           // explicit service ID
+  #[Autowire(service: 'cache.my_bin')]
+  private readonly CacheBackendInterface $cache,                      // named cache bin
+) {}
+```
+
+Prefer explicit `arguments:` for services that other modules may decorate or override; autowiring is fine for internal services and everything in `src/Hook/`.
+
 ## Static Service Access — When to Use
 
 Use `\Drupal::` static calls **only** in:
-- Procedural hook functions in `.module` files
-- `hook_schema()`, `hook_install()`, `hook_update_N()` in `.install`
-- Class static methods where DI is not possible (e.g., `FieldItemBase::schema()`)
+- `hook_schema()`, `hook_install()`, `hook_update_N()`, `hook_post_update_NAME()` in `.install` / `.post_update.php` (no container-managed instance exists for these)
+- `InstallRequirementsInterface::getRequirements()` (runs before the full API is available)
+- Class static methods where DI is impossible (`FieldItemBase::schema()`, batch callbacks, lazy builder trusted callbacks)
+- Theme helper classes (themes cannot define services)
 
 **Never use `\Drupal::` inside:**
+- Hook classes in `src/Hook/` (they are autowired; inject what you need)
 - Service class constructors or methods
 - Controller methods (use injected services)
 - Form methods (use injected services)
 - Plugin class methods (use injected services)
+
+There are no procedural hook functions in new code, so "it's a `.module` file" is no longer a reason for a static call.
 
 ```php
 // BAD — in a service class
@@ -184,6 +212,7 @@ class MyService {
 | `token` | `Token` | Evaluate token strings |
 | `database` | `Connection` | Database queries |
 | `cache.default` | `CacheBackendInterface` | Default cache bin |
+| `cache.memory` | `MemoryCacheInterface` | Per-request memory cache (replaces `drupal_static()`) |
 | `lock` | `LockBackendInterface` | Distributed locking |
 | `state` | `StateInterface` | Runtime state storage |
 | `queue` | `QueueFactory` | Queue management |
@@ -210,6 +239,27 @@ Tags tell Drupal to automatically collect services for specific purposes:
 | `page_cache_request_policy` | Custom page cache policy |
 | `page_cache_response_policy` | Custom page cache response policy |
 | `twig.extension` | Adds Twig functions/filters |
+
+## Per-Request Memoisation Without `drupal_static()`
+
+`drupal_static()` and `drupal_static_reset()` are deprecated in 11.5. Keep per-request results on the service itself, or use the `memory` cache bin when the value must be shared across services or reset from elsewhere:
+
+```php
+public function __construct(
+  #[Autowire(service: 'cache.memory')]
+  private readonly MemoryCacheInterface $memoryCache,
+) {}
+
+public function lookup(string $key): array {
+  if ($cached = $this->memoryCache->get("my_module:lookup:$key")) {
+    return $cached->data;
+  }
+  $data = $this->expensiveLookup($key);
+  $this->memoryCache->set("my_module:lookup:$key", $data);
+  return $data;
+}
+// Reset: $this->memoryCache->delete("my_module:lookup:$key");
+```
 
 ## Exception: FieldType Plugins
 

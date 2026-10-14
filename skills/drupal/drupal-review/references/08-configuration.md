@@ -95,6 +95,8 @@ field.storage_settings.my_field_type:
 - A missing schema causes config validation failures and broken translation/override systems.
 - Schema types: `string`, `label`, `text`, `boolean`, `integer`, `float`, `mapping`, `sequence`, `config_object`, `config_entity`.
 - Use `label` type for human-readable labels (automatically translatable).
+- Add validation `constraints:` (e.g. `Range`, `Choice`, `NotBlank`) so the config is fully validatable; recipes and the config validation checker depend on it.
+- YAML files may use `!php/const` for PHP constants and enum cases since 11.5 (`max_items: !php/const Drupal\my_module\Settings::DEFAULT_MAX`). Keep it to constants that are genuinely shared with PHP; plain literals stay readable.
 
 ### Default Config in `config/install/`
 
@@ -220,6 +222,25 @@ $store = \Drupal::service('tempstore.shared')->get('my_module');
 - Multi-step form data that spans multiple page requests
 - Draft data not yet committed to permanent storage
 - "Currently being edited by" functionality
+
+## Roles and Permissions Programmatically
+
+`user_role_grant_permissions()`, `user_role_revoke_permissions()` and `user_role_change_permissions()` are deprecated in 11.5. Use the role entity, loaded override-free so `settings.php` overrides are not written back:
+
+```php
+use Drupal\user\Entity\Role;
+use Drupal\user\RoleInterface;
+
+Role::loadOverrideFree(RoleInterface::AUTHENTICATED_ID)
+  ->grantPermissions(['access my feature'])
+  ->save();
+
+Role::loadOverrideFree('editor')
+  ->changePermissions(['edit any article content' => TRUE, 'delete any article content' => FALSE])
+  ->save();
+```
+
+In install hooks and post-update hooks this is the only place `Role::loadOverrideFree()` static calls are acceptable; elsewhere inject `entity_type.manager` and use `getStorage('user_role')->loadOverrideFree($id)`.
 
 ## Config Management Workflow
 

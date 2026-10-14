@@ -2,9 +2,15 @@
 
 ## PHP Attributes vs Doctrine Annotations
 
-**Drupal 11 standard: PHP native attributes.** Doctrine annotation-based discovery (`@Block(...)` in docblocks) is deprecated and should not be used in new code. Both forms are still supported for backward compatibility, but all new plugins must use PHP attributes.
+**Standard: PHP native attributes.** Doctrine annotation-based discovery (`@Block(...)` in docblocks) is deprecated and must not appear in new code. The timeline:
 
-| Old (Drupal 8–10, deprecated) | New (Drupal 11 standard) |
+- 10.2: attribute classes exist for core plugin types.
+- 11.2: a plugin type that offers no attribute class is deprecated.
+- 11.3: `doctrine/annotations` was abandoned upstream; core forked the parts it still needs.
+- **12.0: every plugin manager must be constructed with an attribute class.** An annotation class may still be passed alongside it for contrib that supports older cores.
+- 13.0: annotation-based plugin definitions are removed.
+
+| Old (Drupal 8–10, deprecated) | New (standard) |
 |---|---|
 | `@Block(id = "x", ...)` in docblock | `#[Block(id: 'x', ...)]` before `class` |
 | `@Translation("text")` | `new TranslatableMarkup('text')` |
@@ -289,9 +295,9 @@ class MyCondition extends ConditionPluginBase {
 
 ## Creating a Custom Plugin Type
 
-### 1. Attribute Class (`src/Annotation/Importer.php` → now `src/Attribute/Importer.php`)
+### 1. Attribute Class (`src/Attribute/Importer.php`)
 
-In Drupal 11, define the attribute as a native PHP `#[Attribute]` class:
+Define the attribute as a native PHP `#[Attribute]` class. Do not create an `src/Annotation/` class for a new plugin type:
 
 ```php
 namespace Drupal\products\Attribute;
@@ -387,26 +393,35 @@ $instance->import($importer_entity);
 ```
 
 **Rules:**
-- Pass the attribute *class* (not annotation class) as the third argument to `DefaultPluginManager::__construct()`.
+- Pass the attribute class as the fifth argument to `DefaultPluginManager::__construct()`. In Drupal 12 this argument is mandatory; a manager without it is a fatal error.
 - Always call `$this->setCacheBackend()`. Without it, Drupal re-scans the filesystem every request.
 - Always call `$this->alterInfo('hook_name')` to provide a module alter hook.
-- For dual Drupal 10/11 compatibility, you can pass *either* the annotation *or* attribute class; both forms are discovered.
+- Contrib that still supports Drupal 10.x may pass the annotation class as the sixth argument as well; both forms are discovered until Drupal 13. Custom site code never needs this.
 
 ---
 
 ## Altering Plugin Definitions
 
 ```php
-// hook_block_alter() in my_module.module (or via OOP hook — see 14-oop-hooks.md)
-function my_module_block_alter(array &$definitions): void {
-  if (isset($definitions['system_main_block'])) {
-    $definitions['system_main_block']['admin_label'] = t('Main content');
-  }
-}
+// src/Hook/MyModulePluginHooks.php — see 14-oop-hooks.md
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 
-// Custom plugin type alter
-function my_module_products_importer_info_alter(array &$definitions): void {
-  // modify definitions
+class MyModulePluginHooks {
+
+  #[Hook('block_alter')]
+  public function blockAlter(array &$definitions): void {
+    if (isset($definitions['system_main_block'])) {
+      $definitions['system_main_block']['admin_label'] = new TranslatableMarkup('Main content');
+    }
+  }
+
+  // Alter hook for the custom plugin type defined above.
+  #[Hook('products_importer_info_alter')]
+  public function importerInfoAlter(array &$definitions): void {
+    // modify definitions
+  }
+
 }
 ```
 
