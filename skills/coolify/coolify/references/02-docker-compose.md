@@ -29,7 +29,8 @@ Consequences to internalise:
 | **Branch** | Detected from the repository |
 | **Custom build command** | Overrides `docker compose build` |
 | **Custom start command** | Overrides `docker compose up -d` |
-| **Raw compose deployment** | Skips Coolify's modifications entirely. Advanced; you then own labels and networks |
+| **Raw compose deployment** | Skips Coolify's modifications entirely. Advanced; you then own labels and networks — and the deploy's `docker compose up` runs on the host, not in the helper (§8B) |
+| **Preserve repository during deployment** | Copies the checkout to `/data/coolify/applications/<uuid>` on the server and runs the deploy's `docker compose up` from there — on the host, not in the helper (§8B) |
 
 ## 3. Hard rules
 
@@ -102,7 +103,7 @@ The magic variable is optional; plenty of working resources have none and set th
 
 Note that the adjacent mechanism changed in **4.3.17**, so this observation is bounded to ≤ 4.3.16 and any retest must run on current. 4.3.17 changed the guard that decides whether a magic variable regenerates a domain — the same code path as the symptom above.
 
-**Multi-port images.** Traefik infers the backend port from the image's exposed ports and cannot do so unambiguously when there is more than one. If labels are present and routing still fails, pin the port so Coolify emits an explicit `loadbalancer.server.port`.
+**Multi-port images.** With no explicit port, Traefik takes the **lowest** port the image exposes (`08-troubleshooting.md` §2.2). That is right for a base image exposing `80 443 2019` when the app listens on 80, and wrong — `502 Bad Gateway` with labels present — when the app listens on, say, 8080. Pin the port so Coolify emits an explicit `loadbalancer.server.port`. Coolify may then warn "Port N is not listed in Ports Exposes and is not used by any application domain"; for a Compose resource that warning is harmless (observed on 4.3.23).
 
 *How you pin it depends on the version.* Up to 4.3.14, you set the domain to `https://host:80` and the port stayed in the domain string. **From 4.3.15 the port is stripped out on save and stored in `domain_port_overrides`**, and the UI has a dedicated port field. Typing `https://host:80` still works as input — it is parsed and the port extracted — but the domain reads back as `https://host`, which looks like the edit was discarded. It was not; check the port field, or `domain_port_overrides` in the database.
 
@@ -119,7 +120,7 @@ Coolify generates values for variables matching `SERVICE_<TYPE>_<IDENTIFIER>`, w
 | `SERVICE_FQDN_<ID>` | FQDN derived from the generated URL |
 | `SERVICE_URL_<ID>` | Full URL based on the instance wildcard domain |
 | `SERVICE_NAME_<ID>` | Service name identifier — useful when preview deployments vary the name |
-| `SERVICE_PASSWORD_<ID>` | Random 16-character string |
+| `SERVICE_PASSWORD_<ID>` | Random 32-character string, no symbols — Laravel's `Str::password` default. The upstream docs' "16" is wrong; verified 32 from 4.0.0 through 4.3.23 |
 | `SERVICE_PASSWORD_64_<ID>` | Random 64-character string, no symbols |
 | `SERVICE_PASSWORDWITHSYMBOLS_<ID>` | As above, with symbols (`_64` variant too) |
 | `SERVICE_USER_<ID>` | Random 16-character string |
@@ -231,7 +232,8 @@ It used to be mandatory in this shape: without it a redeploy that found a local 
 
 | What runs | Where | Whose `~/.docker/config.json` |
 | --- | --- | --- |
-| Deploy pre-pull and `docker compose up` | **Inside the helper** | The **SSH user's**, bind-mounted to `/root/.docker/config.json` in the helper |
+| Deploy pre-pull, and the deploy's `docker compose up` by default | **Inside the helper** | The **SSH user's**, bind-mounted to `/root/.docker/config.json` in the helper |
+| The deploy's `docker compose up` when **Preserve repository during deployment** is on, or **raw compose deployment** without a custom start command | **On the host** | **root's** — sudo-wrapped whenever the server is non-root. With `pull_policy: always` the deploy itself fails, right after a successful pre-pull (observed on 4.3.23) |
 | Restart, start-after-stop, service deploy, auto-start after reboot | **On the host** | **root's** — the command is sudo-wrapped whenever the server is non-root |
 | Build-server deploys | **On the host**, and Coolify passes `up --pull always` explicitly | **root's**, regardless of what the compose file says |
 

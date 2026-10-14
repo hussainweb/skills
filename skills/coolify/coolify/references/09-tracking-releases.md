@@ -100,7 +100,8 @@ Each row is a change that altered behaviour for an existing setup. Detail lives 
 
 - **Traefik does infer a port from a multi-port image.** `getPort` sorts the exposed ports numerically and takes the lowest. It does not error and does not guess. See `08-troubleshooting.md` §2.2.
 - **An unhealthy container does not fail a deploy.** Observed directly: deployment reported as passed while the application was failing. A green deploy means the containers started.
-- **Coolify pulls from two credential contexts** — the helper uses the SSH user's docker config, host-side commands are sudo-wrapped and use root's. See `02-docker-compose.md` §8B.
+- **Coolify pulls from two credential contexts** — the helper uses the SSH user's docker config, host-side commands are sudo-wrapped and use root's. The deploy's own `docker compose up` is host-side when the resource preserves its repository or uses raw compose deployment (verified at 4.3.23). See `02-docker-compose.md` §8B.
+- **`SERVICE_PASSWORD_<ID>` is 32 characters, not 16.** `Str::password(symbols: false)` with Laravel's default length, unchanged from 4.0.0 to 4.3.23. The upstream docs say 16.
 
 ## 7. What is worth recording
 

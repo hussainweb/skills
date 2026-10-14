@@ -85,7 +85,7 @@ This is 12-factor with one Coolify-specific convention attached. Full rules — 
 ### Setting up a new project for Coolify
 
 1. Establish the target Coolify version (Rule 0).
-2. Choose the build model — build on the Coolify server, or build in CI and pull an image. See `references/07-github-actions-deployment.md` §1 for the trade-off; it determines the shape of the compose file.
+2. Choose the build model — build on the Coolify server, or build in CI and pull an image. See `references/07-github-actions-deployment.md` §1 for the trade-off; it determines the shape of the compose file. If CI builds the image, record the destination server's CPU architecture now (`uname -m` over SSH): an `amd64` image on an `aarch64` server crash-loops with `exec format error`, which does not read like an architecture mismatch. §5 of that reference covers building for it.
 3. Write `docker-compose.yml` following `references/02-docker-compose.md`.
 4. Write the `environment:` blocks following `references/03-environment-variables.md`, and keep `.env.example` in parity with them.
 5. Decide where the database, cache, and search live — in-stack, Coolify-managed and shared, or external: `references/04-shared-infrastructure.md`.
@@ -114,7 +114,7 @@ Flag these on sight, in any Coolify-targeted compose file:
 - A custom `networks:` block. Coolify creates and manages the network; defining your own causes intermittent HTTPS outages because containers land on two networks and Traefik picks non-deterministically.
 - `ports:` on a service that is meant to be reached through the proxy. It bypasses Traefik, exposes the container on the host interface, and invalidates any assumption that `X-Forwarded-*` headers are trustworthy.
 - Two or more services carrying `build:` while sharing one `image:` tag. buildx bake runs them in parallel and they race on export: `image "…": already exists`.
-- `pull_policy: always` in a registry-pull deployment on 4.3.19+. Coolify already pre-pulls every deploy, and the line makes host-side restarts try to pull as **root** rather than as the SSH user, failing with `unauthorized` on an image that deployed fine. Required only on ≤ 4.3.18, where there is no pre-pull.
+- `pull_policy: always` in a registry-pull deployment on 4.3.19+. Coolify already pre-pulls every deploy, and the line makes host-side restarts — and the deploy's own `docker compose up`, when the resource preserves its repository or uses raw compose deployment — try to pull as **root** rather than as the SSH user, failing with `unauthorized` on an image that pre-pulled fine. Required only on ≤ 4.3.18, where there is no pre-pull.
 - Secrets baked into the image, or committed in the compose file rather than referenced as `${VAR}`.
 - A healthcheck that only accepts `200`. See `references/05-php-applications.md` §4 — 302, 401 and 403 are all normal for a correctly configured app in some states.
 

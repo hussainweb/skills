@@ -44,7 +44,17 @@ Details that cause trouble:
   *Open question:* if the config mount has been conditional since at least 4.1.2, what authenticated these pulls before 4.3.19? The leading explanation, unconfirmed, is that nothing did — the pull was already failing silently while the server kept running its local image. See `08-troubleshooting.md` §4.
 
   The fix is unchanged: a login for the SSH user itself, or the same config file copied into that user's home, owned by that user with mode 600.
-- **The PAT needs `read:packages`**, nothing more, for pulling. A classic PAT works; a fine-grained token needs the package read permission on the owner.
+- **When that user is not in the `docker` group** — which is normal: Coolify sudo-wraps its commands and does not need the group — a plain `docker login` or `docker pull` as that user fails with `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`. Do not add the user to the group; membership is root-equivalent. Write the file with `sudo` and point Docker at the user's directory explicitly:
+
+  ```sh
+  echo "$GITHUB_PAT" | sudo docker --config /home/<user>/.docker login ghcr.io -u "$GITHUB_USERNAME" --password-stdin
+  sudo chown <user>:<user> /home/<user>/.docker/config.json
+  chmod 600 /home/<user>/.docker/config.json
+  ```
+
+  `--config` is the whole point: on Ubuntu `sudo` resets `HOME` to `/root`, so a bare `sudo docker login` writes root's file.
+- **A root-owned `~/.docker` in the SSH user's home** stops the login writing `config.json`. Seen once, origin unknown — not `sudo docker`, which uses `/root`. Check `stat ~/.docker`; `sudo chown -R <user>:<user> ~/.docker` fixes it and does not affect root.
+- **The PAT needs `read:packages`**, nothing more, for pulling. A classic PAT works; a fine-grained token needs the package read permission on the owner. **Read the status code:** `401` / `unauthorized` means no usable login reached the registry; **`403 Forbidden` means the login worked and the token is not allowed** — a classic PAT not authorised for the organisation's SAML SSO (Settings → Developer settings → Personal access tokens (classic) → the token → Configure SSO → Authorize), a missing `read:packages` scope, or no access to the package.
 - **Do this on every destination server**, including every node of a Swarm cluster — each node pulls independently.
 - The login persists across reboots. It does not persist across a rebuilt server, and a rotated PAT breaks it silently until the next pull.
 - **Verify from the server, not from the UI:**
@@ -53,11 +63,11 @@ Details that cause trouble:
   docker pull ghcr.io/<org>/<repo>:latest
   ```
 
-  A `denied` or `unauthorized` here is the whole problem; anything Coolify reports is downstream of it. **Run it as the user Coolify connects as, without `sudo`** — `sudo docker pull` reads root's config and can succeed while the deploy still fails (see above).
+  A `denied` or `unauthorized` here is the whole problem; anything Coolify reports is downstream of it. **Run it as the user Coolify connects as, without `sudo`** — `sudo docker pull` reads root's config and can succeed while the deploy still fails (see above). When that user cannot reach the socket, `sudo docker --config /home/<user>/.docker pull …` tests the same file the helper mounts.
 
 ### `pull_policy: always` — omit it on 4.3.19+
 
-The rule inverted. From 4.3.19 Coolify pre-pulls every image-based compose service itself, so the line no longer buys anything on deploy — and it makes **host-side** `docker compose up -d` (restart, start-after-stop, service deploy, auto-start after reboot) attempt a pull. Those run sudo-wrapped on a non-root server, so they read **root's** `~/.docker/config.json`, not the SSH user's, and fail with `unauthorized` on an image that deployed successfully minutes earlier.
+The rule inverted. From 4.3.19 Coolify pre-pulls every image-based compose service itself, so the line no longer buys anything on deploy — and it makes **host-side** `docker compose up -d` (restart, start-after-stop, service deploy, auto-start after reboot — and the deploy's own `up`, when the resource preserves its repository or uses raw compose deployment) attempt a pull. Those run sudo-wrapped on a non-root server, so they read **root's** `~/.docker/config.json`, not the SSH user's, and fail with `unauthorized` on an image that deployed successfully minutes earlier.
 
 This is the trap that follows directly from doing §2 correctly: log in as the SSH user, and the helper-run deploy pull works while every host-side pull does not. Omit `pull_policy: always` rather than also logging in as root. Full table of which pull runs where: `02-docker-compose.md` §8B.
 
@@ -231,7 +241,7 @@ Notes:
 - **`type=semver` is where release tags come from, and it has a retention consequence — see §6 before relying on it.** The rule turns a pushed git tag like `v1.2.3` into the image tag `1.2.3`. The prune job's depth cap counts versions and cannot filter by tag, so a release image is *not* exempt: it expires once that many newer builds exist. If you publish releases you intend to keep, §6 lists the ways to protect them. If you only ever deploy from `latest` and roll back with `sha-`, drop this line and the problem never arises.
 - `cache-from`/`cache-to: type=gha` reuses layers across runs. `mode=max` caches intermediate stages too, which is the difference that matters for a multi-stage build.
 - `secrets:` passes a BuildKit secret matching the `--mount=type=secret,id=COMPOSER_AUTH` in the Dockerfile. This is how private dependencies get in without landing in image metadata. `secrets.COMPOSER_AUTH || secrets.GITHUB_TOKEN` falls back to the automatic token, which suffices for private repositories in the same organisation.
-- Add `platforms: linux/amd64,linux/arm64` only if the servers genuinely differ. Multi-arch roughly doubles build time.
+- **Build for the destination server's architecture, and check it rather than assume.** `uname -m` over SSH: `x86_64` is what `ubuntu-latest` builds for; `aarch64` (AWS Graviton, Ampere, Hetzner CAX) is not, and an `amd64` image there crash-loops with `exec /usr/local/bin/<entrypoint>: exec format error`, which reads like a broken script. For an arm64 server, run the whole pipeline — build, boot, smoke test — on `runs-on: ubuntu-24.04-arm` and keep the image single-arch. Those runners were available to a private repository when this was tested; check your plan. Add `platforms: linux/amd64,linux/arm64` only if the servers genuinely differ: multi-arch roughly doubles build time, and a multi-arch index references per-platform manifests that GHCR lists as *untagged*, which the prune in §6 would delete out from under the tag.
 - **`provenance: false` is not optional if you prune untagged versions (§6).** `docker/build-push-action` attaches a provenance attestation by default. On GHCR that attestation appears as an *untagged* package version which the tagged manifest index still references — so an untagged prune can delete it out from under a live tag and break `docker pull`. Single-arch deployment images gain nothing from attestations. Keep them only if you actually verify them, and then never prune untagged versions to zero.
 
 ## 6. Pruning old package versions
@@ -278,7 +288,7 @@ There is **no tag-regex input.** GitHub Actions only *warns* about an unrecognis
   1. **Publish releases to a separate package.** Point tag-triggered builds at a different image name and aim the prune job only at the main-branch package. The pruner then cannot reach a release image at all. No new action, no new secret, and nothing to fail silently — this is the option to reach for first.
   2. **Compute the IDs yourself and keep this action.** `package-version-ids` takes a comma-separated list, which is the escape hatch the missing filter would have provided. List versions over the REST API, drop anything carrying a release tag with `jq`, drop the newest few, and pass the rest. Works with the built-in `GITHUB_TOKEN`; costs you a short script to maintain.
   3. **Move to a tag-aware action.** Both realistic options want a PAT, which is the real price. [`snok/container-retention-policy`](https://github.com/snok/container-retention-policy) is actively maintained, but its `*` and `!` filter operators are unavailable with `GITHUB_TOKEN` — that token cannot call the list-packages endpoint — so tag exclusion needs a personal access or GitHub App token, and the repository needs the Admin role on the package. [`vlaurin/action-ghcr-prune`](https://github.com/vlaurin/action-ghcr-prune) has exactly the right input in `keep-tags-regexes`, but has not released since January 2024 and also documents needing a PAT with admin on the package.
-- **`min-versions-to-keep: 0` on the untagged step requires `provenance: false` on the build** (§5). Otherwise this step deletes the attestation manifest that the tagged index references.
+- **`min-versions-to-keep: 0` on the untagged step requires `provenance: false` and a single-arch image** (§5). Otherwise this step deletes the attestation or per-platform manifests that the tagged index references, and the next `docker pull` fails.
 - Run it **after** the push, never before — deleting first would remove the version you are about to need.
 - It runs in the same workflow rather than on a schedule so that storage never drifts unattended. A separate scheduled workflow is a fine alternative if the job is noisy.
 - Listing package versions through the REST API (to check what the job actually did) needs a token with `read:packages`. The workflow's own `GITHUB_TOKEN` with `packages: write` is enough for the deletes themselves.
@@ -394,8 +404,11 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | --- | --- | --- |
 | CI green, site unchanged | The deploy step's HTTP method | `GET` against Coolify ≥ 4.2.0 → `405` |
 | CI green, deploy green, site unchanged | Coolify version, then `pull_policy` in the compose file | On ≤ 4.3.18, a missing `pull_policy: always` reuses the stale local `latest`. On 4.3.19+ Coolify pre-pulls, so look elsewhere |
-| Image pulls once, then `unauthorized` on the same image a few steps later | Whether `pull_policy: always` is set, and which user holds the registry login | The helper pull uses the **SSH user's** config; a host-side `up` forced to pull by `pull_policy: always` is sudo-wrapped and uses **root's**. Drop the line (4.3.19+) — see §2 |
+| Image pulls once, then `unauthorized` on the same image a few steps later | Whether `pull_policy: always` is set, and which user holds the registry login | The helper pull uses the **SSH user's** config; a host-side `up` forced to pull by `pull_policy: always` is sudo-wrapped and uses **root's**. The deploy's own `up` is host-side too when the resource preserves its repository or uses raw compose deployment. Drop the line (4.3.19+) — see §2 |
 | Deploy fails pulling the image | `docker pull ghcr.io/<org>/<repo>:latest` **on the server, as the SSH user, without `sudo`** | No `docker login`, or logged in as the wrong user. **Started failing right after a Coolify upgrade → 4.3.19 moved the image pull before the container stop, surfacing an anonymous pull that was already happening; the login only exists for root.** See §2 |
+| Pull returns `403 Forbidden`, not `401` | SSO authorisation on the PAT, its scopes, access to the package | Logged in, not allowed — see §2 |
+| `docker login` on the server: `permission denied … docker.sock` | `id -nG` for the SSH user | Not in the `docker` group, which is fine for Coolify; use the `sudo docker --config` form in §2 |
+| Container crash-loops: `exec … : exec format error` | `uname -m` on the server vs `docker image inspect <image> --format '{{.Architecture}}'` | Image built for the wrong CPU architecture — §5 |
 | Prune job succeeds, storage still growing | The `package-name` value | It is the package name, not `owner/repo` |
 | Deploy step sees empty `COOLIFY_WEBHOOK_URL` though "the secret is set" | Where the secret lives vs the job's `environment:` | Secret stored on an environment the job does not name (wrong name, or no `environment:` line at all), or the named environment was silently auto-created empty — see §7 |
 | Two deploys per push | Coolify's git-source auto-deploy | Both Coolify's webhook and CI are triggering |
