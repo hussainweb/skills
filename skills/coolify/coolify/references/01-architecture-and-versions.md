@@ -15,6 +15,9 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.3.19 | 10 Sep 2026 | **Behaviour change:** Sentinel mandatory on regular servers; compose images pulled *before* the old containers stop |
 | 4.3.22 | 18 Sep 2026 | **Breaking:** host-path persistent volumes removed from UI and API. **Do not run this version** — see below |
 | 4.3.23 | 18 Sep 2026 | Fixes the 4.3.22 health-check regression, 96 minutes later |
+| 4.4.0 | 6 Oct 2026 | **Behaviour change:** registry logins in the UI and API; generated container names and `coolify.*` labels renamed; variable-name validation; proxy no longer re-attached to networks hourly; `coolify-realtime` container gone; `read:sensitive` API ability for logs |
+| 4.4.4–4.4.5 | 7–9 Oct 2026 | **Do not run** — the `coolify` container fails to start (`s6-overlay … Permission denied`, [#12141](https://github.com/coollabsio/coolify/issues/12141)) |
+| 4.4.6 | 9 Oct 2026 | Fixes the 4.4.4 startup failure |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -119,11 +122,42 @@ Separately, and still true: on `compose_parsing_version` 1 or 2 the two variable
 
 Only resources whose health check Coolify waits on are affected, which for Compose resources is most of them (§7 of `02-docker-compose.md`: they inherit the image's `HEALTHCHECK`).
 
+### 4.4.0 — registry logins moved into Coolify
+
+Each server has a **Registries** tab (and `GET`/`POST`/`DELETE /servers/{uuid}/registries`, plus `POST …/registries/{registry}/check`). Login runs `docker --config "$HOME/.docker" login` over the server's SSH session, so it writes **the same file the helper mounts** — the SSH user's — and the token is not stored in Coolify. Two consequences on a non-root server: the command is sudo-wrapped, so the file (and `~/.docker` itself, if it did not exist) is created **as root** inside the SSH user's home, and a later hand `docker login` as that user then fails to write it; and the "used by" column only knows applications with a Docker image name set, so a Compose resource pulling `image:` from a registry is **not** listed as needing it. The check endpoint is the right verification; `07-github-actions-deployment.md` §2.
+
+### 4.4.0 — generated container names and labels changed
+
+Generated names are `<prefix-or-uuid>-<ISO 8601 timestamp>` (`shop-api-20260908T141530`), and Compose services get `<service>-<prefix-or-uuid>-<timestamp>`; the prefix is `custom_container_name_prefix` in the application's container settings, optional, slugified, unique per server. A **custom container name** now means **consistent naming**, which gives up rolling updates — and the upgrade migration switched consistent naming **on** for every application that had a stored custom name with the setting off, so those applications now stop before they start. If deploys gained downtime at 4.4.0, that is why: clear the custom name and use the prefix instead. Containers are labelled `coolify.applicationUuid` / `coolify.serviceUuid` / `coolify.databaseUuid` instead of the numeric-ID labels; existing containers gain the new labels on their next deploy.
+
+### 4.4.0 — the proxy is no longer re-attached to networks hourly
+
+Coolify used to reconnect `coolify-proxy` to every Docker network on the hour and on server checks. Now it connects it only when a destination is created, when a resource is deployed, and when the proxy starts or restarts. A missing attachment therefore **persists** until you redeploy the resource or restart the proxy; it no longer heals itself within the hour.
+
+### 4.4.0 — variable names are validated
+
+Names must match `[A-Za-z_][A-Za-z0-9_.]*`. An existing runtime-only variable with another name (`my-var`) still deploys, with a warning and a suggested name; an invalid **build-time** name stops the image build. `03-environment-variables.md` §1.
+
+### 4.4.0 — smaller changes that alter an action
+
+- **`coolify-realtime` is gone.** Realtime runs on Laravel Reverb inside the `coolify` container. Do not diagnose a missing `coolify-realtime` container as a fault.
+- **Reading logs through the API needs `read:sensitive`** (`/applications/{uuid}/logs` and the database and service equivalents); `/deployments/{uuid}` still needs only `read`, so CI polling is unaffected. `instant_deploy` needs `deploy`.
+- **Server roles.** A server can be *Deployments only*, *Builds only* or both (`server_role` in the API; `is_build_server` still works). A deployments-only server refuses to build and the application needs a Docker image name — except Docker Image and **Docker Compose** applications, which are exempt and still build where they deploy.
+- **Multiple servers per application:** additional servers must run the same proxy as the primary and always pull the image the primary pushed; Docker Compose applications and persistent volumes can no longer be combined with multiple servers.
+- **Traffic analytics** is a per-server toggle, off by default, and **enabling it restarts the proxy**. Caddy resources need a redeploy afterwards.
+- **New volume mounts are named volumes**; existing bind mounts keep their paths, read-only in the UI (continuing 4.3.22).
+- **Non-root servers:** several paths that failed when the SSH user could not write `/data/coolify` or enter the proxy directory were fixed, and pipes inside quoted strings (Docker `--format` templates) are no longer rewritten with `sudo`. Coolify now writes files with `sudo tee` over stdin.
+- **The Traefik dashboard router** is no longer emitted in new proxy configurations and was removed from saved ones; restart the proxy to apply.
+
+### 4.4.2 — server builds finally keep their layer cache
+
+Up to 4.4.1 the helper's `--add-host` entries changed on every deploy and invalidated the Docker build cache, so a build-on-server deploy was effectively always cold ([#11781](https://github.com/coollabsio/coolify/pull/11781)). Re-measure before optimising a Dockerfile for a cache that only started working at 4.4.2.
+
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 
 **The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged.
 
-Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19 and v4.3.22**. Only the build-server path throws on a missing config; the ordinary path silently omits the mount.
+Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22 and v4.4.6**. Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
 
 **What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance.
 
@@ -133,7 +167,7 @@ Fix: a login written to the SSH user's `~/.docker/config.json` — `docker login
 
 **Why it worked before** is an open question with a leading, unconfirmed explanation and a test that would settle it: §4 of `08-troubleshooting.md`.
 
-**What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23:
+**What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23 and unchanged at 4.4.6:
 
 - The deploy's pre-pull runs **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`, so it uses the **SSH user's** login. So does the deploy's `docker compose up` — **by default**. Two resource settings move that `up` onto the host: **Preserve repository during deployment**, and **raw compose deployment** without a custom start command (raw compose *with* a custom start command stays in the helper). The deploy log shows which ran: the helper form is prefixed `docker exec <helper>`, the host form is `sudo … docker compose --env-file /data/coolify/applications/<uuid>/.env --project-directory /data/coolify/applications/<uuid> … up -d`.
 - Every host-side `docker compose up -d` — restart, start-after-stop, service deploy, auto-start after a reboot, and the two deploy cases above — is sudo-wrapped whenever the server is non-root, so it reads **root's** `~/.docker/config.json`.
@@ -152,7 +186,7 @@ One host runs the Coolify application itself, as a set of containers:
 | `coolify` | The Laravel application and UI |
 | `coolify-db` | Postgres; user and database are both `coolify` |
 | `coolify-redis` | Queues and cache |
-| `coolify-realtime` | WebSocket push for the UI |
+| `coolify-realtime` | WebSocket push for the UI — **gone since 4.4.0**, when realtime moved inside the `coolify` container (Laravel Reverb) |
 | `coolify-proxy` | Traefik, if the control-plane host also runs workloads |
 
 The control plane reaches every application server **over SSH** and drives Docker there. It does not require an agent.

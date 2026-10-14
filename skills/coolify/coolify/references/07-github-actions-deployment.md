@@ -27,7 +27,25 @@ The choice determines the shape of `docker-compose.yml`; see `02-docker-compose.
 
 ### `docker login` on the destination server
 
-**Coolify has no registry-credential UI. It uses the Docker daemon's stored credentials on the server**, so someone must log in there once, over SSH:
+**Coolify uses the Docker daemon's stored credentials on the server** — the SSH user's `~/.docker/config.json`. Someone must log in there once.
+
+**On 4.4.0+, do it from Coolify.** The server's **Registries** tab (Servers → the server → Registries) has a GHCR preset; so does the API:
+
+```sh
+curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_API_TOKEN" -H 'Content-Type: application/json' \
+  "https://<coolify-host>/api/v1/servers/<server-uuid>/registries" \
+  -d '{"registry":"ghcr.io","username":"<github-user>","password":"<PAT>"}'
+curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+  "https://<coolify-host>/api/v1/servers/<server-uuid>/registries/ghcr.io/check"   # re-runs docker login with the saved credentials
+```
+
+Coolify runs `docker --config "$HOME/.docker" login` over its own SSH session, so the file it writes is exactly the one the helper mounts, and the token is not stored in Coolify. Check the request body against your version's `openapi.yaml` before scripting it. Three things to know:
+
+- On a **non-root server** the login is sudo-wrapped, so `config.json` — and `~/.docker` itself, if it did not exist — is created **as root** inside the SSH user's home. Deploys are unaffected (the helper runs as root), but a later hand `docker login` as the user fails to write the file; the chown below fixes that.
+- The tab's **"used by" column only knows applications with a Docker image name set**. A Compose resource pulling `image:` from GHCR is not listed as needing GHCR, so an empty "needed" list proves nothing for Compose.
+- The **check** is the verification to prefer: it exercises the saved login as the deploy will.
+
+**On ≤ 4.3.x, or when you prefer SSH**, log in by hand on the server:
 
 ```sh
 echo "$GITHUB_PAT" | docker login ghcr.io -u "$GITHUB_USERNAME" --password-stdin
@@ -53,7 +71,7 @@ Details that cause trouble:
   ```
 
   `--config` is the whole point: on Ubuntu `sudo` resets `HOME` to `/root`, so a bare `sudo docker login` writes root's file.
-- **A root-owned `~/.docker` in the SSH user's home** stops the login writing `config.json`. Seen once, origin unknown — not `sudo docker`, which uses `/root`. Check `stat ~/.docker`; `sudo chown -R <user>:<user> ~/.docker` fixes it and does not affect root.
+- **A root-owned `~/.docker` in the SSH user's home** stops a hand login writing `config.json`. On 4.4.0+ the Registries tab creates it that way on a non-root server (above); on 4.3.x it was seen once with no known origin — not a bare `sudo docker`, which uses `/root`. Check `stat ~/.docker`; `sudo chown -R <user>:<user> ~/.docker` fixes it and affects neither root nor the deploy.
 - **The PAT needs `read:packages`**, nothing more, for pulling. A classic PAT works; a fine-grained token needs the package read permission on the owner. **Read the status code:** `401` / `unauthorized` means no usable login reached the registry; **`403 Forbidden` means the login worked and the token is not allowed** — a classic PAT not authorised for the organisation's SAML SSO (Settings → Developer settings → Personal access tokens (classic) → the token → Configure SSO → Authorize), a missing `read:packages` scope, or no access to the package.
 - **Do this on every destination server**, including every node of a Swarm cluster — each node pulls independently.
 - The login persists across reboots. It does not persist across a rebuilt server, and a rotated PAT breaks it silently until the next pull.
@@ -405,7 +423,7 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | CI green, site unchanged | The deploy step's HTTP method | `GET` against Coolify ≥ 4.2.0 → `405` |
 | CI green, deploy green, site unchanged | Coolify version, then `pull_policy` in the compose file | On ≤ 4.3.18, a missing `pull_policy: always` reuses the stale local `latest`. On 4.3.19+ Coolify pre-pulls, so look elsewhere |
 | Image pulls once, then `unauthorized` on the same image a few steps later | Whether `pull_policy: always` is set, and which user holds the registry login | The helper pull uses the **SSH user's** config; a host-side `up` forced to pull by `pull_policy: always` is sudo-wrapped and uses **root's**. The deploy's own `up` is host-side too when the resource preserves its repository or uses raw compose deployment. Drop the line (4.3.19+) — see §2 |
-| Deploy fails pulling the image | `docker pull ghcr.io/<org>/<repo>:latest` **on the server, as the SSH user, without `sudo`** | No `docker login`, or logged in as the wrong user. **Started failing right after a Coolify upgrade → 4.3.19 moved the image pull before the container stop, surfacing an anonymous pull that was already happening; the login only exists for root.** See §2 |
+| Deploy fails pulling the image | On 4.4.0+, the server's Registries tab → check; otherwise `docker pull ghcr.io/<org>/<repo>:latest` **on the server, as the SSH user, without `sudo`** | No `docker login`, or logged in as the wrong user. **Started failing right after a Coolify upgrade → 4.3.19 moved the image pull before the container stop, surfacing an anonymous pull that was already happening; the login only exists for root.** See §2 |
 | Pull returns `403 Forbidden`, not `401` | SSO authorisation on the PAT, its scopes, access to the package | Logged in, not allowed — see §2 |
 | `docker login` on the server: `permission denied … docker.sock` | `id -nG` for the SSH user | Not in the `docker` group, which is fine for Coolify; use the `sudo docker --config` form in §2 |
 | Container crash-loops: `exec … : exec format error` | `uname -m` on the server vs `docker image inspect <image> --format '{{.Architecture}}'` | Image built for the wrong CPU architecture — §5 |

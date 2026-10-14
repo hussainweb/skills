@@ -69,7 +69,7 @@ git show <tag>:resources/views/livewire/project/new/github-private-repository.bl
 gh issue view 5364 --repo coollabsio/coolify --json state,updatedAt
 ```
 
-Unchanged from 4.1.2 through 4.3.23. Two hazards persist for anyone using the workaround:
+Unchanged from 4.1.2 through 4.4.6 (issue 5364 still open; the picker still has no organization field). Two hazards persist for anyone using the workaround:
 
 - **Do not press "Refetch" on the Permissions tab.** It overwrites the source's Coolify name with the real app slug — collapsing the distinct names that tell the organizations apart, since the resource picker shows only name and `html_url`.
 - **"Update on GitHub" 404s.** The link is built as `/organizations/{org}/settings/apps/...` when `organization` is set, but in this setup that field is the installation *target*, not the app *owner*.
@@ -95,13 +95,19 @@ Each row is a change that altered behaviour for an existing setup. Detail lives 
 | 4.3.21 | Restart limits made opt-in and existing tens reset to unlimited |
 | 4.3.22 | Host-path volumes removed from UI and API. **Do not run this version** — untrimmed saved output makes a healthy container fail its own deployment |
 | 4.3.23 | The 4.3.22 regression fixed, 96 minutes later |
+| 4.4.0 | Registry logins in the UI and API, writing the SSH user's docker config; generated container names gain an ISO timestamp and an optional prefix, and applications with a stored custom name were migrated to consistent naming (no rolling update); `coolify.*` container labels keyed by UUID; variable names validated; proxy no longer re-attached to networks hourly; `coolify-realtime` container removed; logs need `read:sensitive` in the API; server roles; multi-server rules tightened; traffic analytics (enabling restarts the proxy); several non-root-server fixes |
+| 4.4.1 | Sentinel 1.0.2, host image pinned by digest |
+| 4.4.2 | Server-side build cache no longer reset every deploy by the helper's `--add-host` entries |
+| 4.4.4–4.4.5 | **Do not run** — the `coolify` container fails to start (`s6-overlay` permission denied, #12141) |
+| 4.4.6 | Fixes the startup failure |
 
 ### Answered along the way
 
 - **Traefik does infer a port from a multi-port image.** `getPort` sorts the exposed ports numerically and takes the lowest. It does not error and does not guess. See `08-troubleshooting.md` §2.2.
 - **An unhealthy container does not fail a deploy.** Observed directly: deployment reported as passed while the application was failing. A green deploy means the containers started.
 - **Coolify pulls from two credential contexts** — the helper uses the SSH user's docker config, host-side commands are sudo-wrapped and use root's. The deploy's own `docker compose up` is host-side when the resource preserves its repository or uses raw compose deployment (verified at 4.3.23). See `02-docker-compose.md` §8B.
-- **`SERVICE_PASSWORD_<ID>` is 32 characters, not 16.** `Str::password(symbols: false)` with Laravel's default length, unchanged from 4.0.0 to 4.3.23. The upstream docs say 16.
+- **`SERVICE_PASSWORD_<ID>` is 32 characters, not 16.** `Str::password(symbols: false)` with Laravel's default length, unchanged from 4.0.0 to 4.4.6. The upstream docs say 16.
+- **The compose pre-pull and `up` commands, and the helper's config mount, are byte-identical between 4.3.23 and 4.4.6.** The 4.4.0 registry feature adds a way to write the file; it does not change who reads it.
 
 ## 7. What is worth recording
 
