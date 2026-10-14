@@ -29,7 +29,7 @@ The choice determines the shape of `docker-compose.yml`; see `02-docker-compose.
 
 **Coolify uses the Docker daemon's stored credentials on the server** — the SSH user's `~/.docker/config.json`. Someone must log in there once.
 
-**On 4.4.0+, do it from Coolify.** The server's **Registries** tab (Servers → the server → Registries) has a GHCR preset; so does the API:
+**On 4.4.0+, do it from Coolify; there is no reason to SSH in for this any more.** The server's **Registries** tab (Servers → the server → Registries) takes a username and token with a GHCR preset, and it also lists logins that were made by hand earlier — it reads the same config file — so an existing CLI login shows up there with its username. The API does the same:
 
 ```sh
 curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_API_TOKEN" -H 'Content-Type: application/json' \
@@ -45,13 +45,13 @@ Coolify runs `docker --config "$HOME/.docker" login` over its own SSH session, s
 - The tab's **"used by" column only knows applications with a Docker image name set**. A Compose resource pulling `image:` from GHCR is not listed as needing GHCR, so an empty "needed" list proves nothing for Compose.
 - The **check** is the verification to prefer: it exercises the saved login as the deploy will.
 
-**On ≤ 4.3.x, or when you prefer SSH**, log in by hand on the server:
+**On ≤ 4.3.x there is no UI for this**, so log in by hand on the server over SSH:
 
 ```sh
 echo "$GITHUB_PAT" | docker login ghcr.io -u "$GITHUB_USERNAME" --password-stdin
 ```
 
-Details that cause trouble:
+Details that cause trouble on the SSH path — and the mechanism behind the 4.4.0 tab, which is why the first bullet still matters there:
 
 - **Log in as the user Coolify connects as.** This has always been the requirement, not a 4.3.19 change. Credentials land in `~/.docker/config.json` for *that* user — `/root/.docker/config.json` when Coolify SSHs as root, `/home/ubuntu/.docker/config.json` when it connects as `ubuntu`. Check the user with `select name, ip, "user" from servers;` on `coolify-db`.
 
@@ -75,7 +75,7 @@ Details that cause trouble:
 - **The PAT needs `read:packages`**, nothing more, for pulling. A classic PAT works; a fine-grained token needs the package read permission on the owner. **Read the status code:** `401` / `unauthorized` means no usable login reached the registry; **`403 Forbidden` means the login worked and the token is not allowed** — a classic PAT not authorised for the organisation's SAML SSO (Settings → Developer settings → Personal access tokens (classic) → the token → Configure SSO → Authorize), a missing `read:packages` scope, or no access to the package.
 - **Do this on every destination server**, including every node of a Swarm cluster — each node pulls independently.
 - The login persists across reboots. It does not persist across a rebuilt server, and a rotated PAT breaks it silently until the next pull.
-- **Verify from the server, not from the UI:**
+- **Verify with the Registries check on 4.4.0+; on ≤ 4.3.x, from the server, not from the UI:**
 
   ```sh
   docker pull ghcr.io/<org>/<repo>:latest
