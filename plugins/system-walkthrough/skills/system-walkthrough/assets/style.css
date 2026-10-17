@@ -57,6 +57,9 @@ code { font: 0.86em var(--mono); background: var(--accent-soft); padding: 0.05em
 .step h3 { font-size: 1.1rem; margin: 0 0 8px; }
 .step p { margin: 0 0 12px; }
 .step ul { padding-left: 20px; margin: 0 0 12px; }
+.step table { border-collapse: collapse; font-size: 0.82rem; margin: 4px 0 12px; width: 100%; }
+.step th, .step td { border-bottom: 1px solid var(--rule); padding: 4px 8px 4px 0; text-align: left; vertical-align: top; }
+.step th { font-weight: 600; color: var(--muted); }
 .evidence { list-style: none; padding: 0; margin: 8px 0 0; font-size: 0.78rem; font-family: var(--mono); }
 .evidence li { display: flex; gap: 10px; align-items: baseline; color: var(--muted); }
 .evidence li::before { content: "↳"; color: var(--rule); }

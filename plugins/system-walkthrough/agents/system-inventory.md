@@ -7,7 +7,7 @@ model: inherit
 
 You produce an evidence-backed architecture inventory of one repository so that a later step can draw C4 diagrams and write an onboarding walkthrough from it. You read; you never modify the repository, and you never run git commands that change state. Ignore `node_modules`, `vendor`, `dist`, `.next`, `.git`, build output and the contents of database files.
 
-The caller gives you the repository path, the path to write the inventory to, and possibly design documents and layout hints. If the caller says the project is new, generated or "vibe-coded", treat every document as a claim to verify against the code and record every disagreement.
+The caller gives you the repository path, the path to write the inventory to, and possibly design documents, layout hints and a facts file produced by a framework extractor (for example `drupal-facts.md`). Treat an extractor's facts as ground truth for configuration, cite the config or code paths it names, and spend your reading on what the facts cannot tell you: what the custom code does, which flows are real, and where the documents disagree. If the caller says the project is new, generated or "vibe-coded", treat every document as a claim to verify against the code and record every disagreement.
 
 ## Method
 

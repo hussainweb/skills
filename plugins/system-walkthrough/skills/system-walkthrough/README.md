@@ -118,6 +118,18 @@ A manual pan or zoom is kept until the next step, which resumes the story's
 camera. Overview also ends on the next step. Dimmed elements stay readable on
 purpose: they are context, not noise.
 
+## Framework profiles
+
+`references/drupal-profile.md` describes how a Drupal site gets its own
+chapters. `scripts/extract-drupal.mjs <repo> <outdir>` reads the config
+export and the custom code without a running site and writes
+`drupal-facts.md`, `drupal-facts.json` and a ready `drupal-content-model.d2`
+scene (trim it; a site with many bundles needs several scenes). The
+roles-by-bundle operations matrix in the facts file is meant to be pasted
+into a step as a table. A Laravel profile is the next one to write; the
+extraction there is `artisan route:list --json`, `model:show` and the
+migrations.
+
 ## Known gaps
 
 - Visual polish: the page is functional, not yet appealing; typography,
@@ -131,3 +143,5 @@ purpose: they are context, not noise.
   containers scene is the example to split.
 - `--fetch-d2` does not verify a checksum of the downloaded release.
 - No evals yet.
+- The Drupal extractor reads the config export, not a database: content, menu links, users and disabled config splits are invisible. Permissions are grouped by text patterns.
+- Only the Drupal profile exists; Laravel is next.

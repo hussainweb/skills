@@ -90,14 +90,23 @@ function inline(s) {
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
 }
 function md(lines) {
-  const out = []; let para = [], list = [];
+  const out = []; let para = [], list = [], table = [];
+  const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
   const flush = () => {
     if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; }
     if (list.length) { out.push(`<ul>${list.map((l) => `<li>${inline(l)}</li>`).join('')}</ul>`); list = []; }
+    if (table.length) {
+      const [head, ...rows] = table.filter((r) => !/^\|?\s*:?-+/.test(r));
+      out.push(`<table><thead><tr>${cells(head).map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>` +
+        rows.map((r) => `<tr>${cells(r).map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`);
+      table = [];
+    }
   };
   for (const raw of lines) {
     const line = raw.trimEnd();
     if (!line.trim()) { flush(); continue; }
+    if (/^\|/.test(line)) { if (para.length || list.length) flush(); table.push(line); continue; }
+    if (table.length) flush();
     if (/^- /.test(line)) { if (para.length) flush(); list.push(line.slice(2)); continue; }
     if (list.length) flush();
     para.push(line.trim());

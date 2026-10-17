@@ -32,6 +32,14 @@ Run the phases in order and keep the files from each. Do not write prose until t
 
 5. **Hand over.** Report the output path, how to open it, what the surprises chapter found, and which of those the owner should turn into issues. Do not commit unless asked.
 
+## Framework profiles
+
+When the system is, or contains, an application built on a framework whose structure is declared in configuration rather than code, run that framework's profile before the inventory and add its chapters after the containers chapter. Profiles live in `references/`:
+
+- `references/drupal-profile.md`: extract content types, fields, roles, views, blocks and custom-module surfaces from the config export with `scripts/extract-drupal.mjs`, then add chapters for the content model, who can do what, the request path, cron and queues, and listings.
+
+A profile never changes the page format. The framework application stays one box in the containers scene and gets its own scenes below it. Roles-by-permissions and similar matrices go in the step text as Markdown tables, not in a diagram.
+
 ## Output location
 
 Default to `docs/walkthrough/` inside the target repository (`story.md`, `scenes/`, `index.html`). The HTML is self-contained; the story and scenes are the source to re-run after the code changes, with a new `commit:` in the front matter.
