@@ -143,5 +143,8 @@ migrations.
   containers scene is the example to split.
 - `--fetch-d2` does not verify a checksum of the downloaded release.
 - No evals yet.
+- A built page embeds the runtime, stylesheet and C4 classes of the moment,
+  so a plugin change does not reach existing walkthroughs until each is
+  rebuilt, and nothing records which plugin version built a page.
 - The Drupal extractor reads the config export, not a database: content, menu links, users and disabled config splits are invisible. Permissions are grouped by text patterns.
 - Only the Drupal profile exists; Laravel is next.
