@@ -1,0 +1,8 @@
+{
+  "name": "system-walkthrough",
+  "version": "0.1.0",
+  "description": "Scroll-driven, single-file HTML onboarding tours of a codebase: C4-shaped D2 scenes, a pinned diagram that reveals, zooms and animates as the story scrolls, every claim linked to the file and line that proves it; with agents that inventory a system from its code and verify a story against the code",
+  "author": {
+    "name": "Hussain Abbas"
+  }
+}

@@ -69,18 +69,11 @@ Personal writing voice and note-taking conventions.
 | [logseq-organization](./skills/writing/logseq-organization/SKILL.md) | `npx skills add hussainweb/skills@logseq-organization` | Format and file Logseq notes to a specific vault's conventions — journals, tags, namespaces, and directory structure |
 | [capture-learning](./skills/writing/capture-learning/SKILL.md) | `npx skills add hussainweb/skills@capture-learning` | Capture technical realizations to Logseq as they surface in conversation — non-obvious behaviors, corrected assumptions, and debugged root causes |
 
-### Architecture
-
-Understand a system you did not fully write.
-
-| Skill | Install | Description |
-|-------|---------|-------------|
-| [system-walkthrough](./skills/architecture/system-walkthrough/SKILL.md) | `npx skills add hussainweb/skills@system-walkthrough` | Build a scroll-driven, single-file HTML onboarding tour of a codebase — C4-shaped scenes in D2, a pinned diagram that reveals, zooms and animates as the story scrolls, and every claim linked to the file and line that proves it |
-
 ## Plugins
 
 Some skills ship inside a plugin instead, alongside behaviour that only an agent's own plugin system can add. A plugin lives at `plugins/<name>/` and holds:
 
+- **`agents/`** — subagent definitions (name, description, tools, prompt) the plugin's skills delegate to.
 - **`plugin.json`** — the manifest Antigravity reads.
 - **`.claude-plugin/plugin.json`** — the manifest Claude Code reads; it points Claude Code at `claude-code/`.
 - **`skills/`** — the plugin's skills, the only copy of them. `npx skills` does not install these.
@@ -91,6 +84,7 @@ Some skills ship inside a plugin instead, alongside behaviour that only an agent
 | [beads](./plugins/beads) | [beads-init](./plugins/beads/skills/beads-init/SKILL.md), [beads-orchestrate](./plugins/beads/skills/beads-orchestrate/SKILL.md), [beads-trim-memories](./plugins/beads/skills/beads-trim-memories/SKILL.md) — set up the [beads](https://github.com/gastownhall/beads) (`bd`) tracker, run multi-agent sessions over it, and trim the memories `bd prime` injects | A row above the prompt: the bead in progress, the ready count, deferred beads that are due, how many memories there are and roughly how many tokens `bd prime` injects |
 | [git](./plugins/git) | [conventional-commits](./plugins/git/skills/conventional-commits/SKILL.md) — commit messages per Conventional Commits v1.0.0, with no agent attribution | A row above the prompt: branch, changes, stashes, an operation in progress, diff size, commits on the default branch, and the branch's PR with its checks and review |
 | [model-bar](./plugins/model-bar) | — | A row above the prompt: a model picker, context fill, prompt cache state, rate limits and session cost |
+| [system-walkthrough](./plugins/system-walkthrough) | [system-walkthrough](./plugins/system-walkthrough/skills/system-walkthrough/SKILL.md) — build a scroll-driven, single-file HTML onboarding tour of a codebase: C4-shaped scenes in D2, a pinned diagram that reveals, zooms and animates as the story scrolls, every claim linked to the file and line that proves it. Agents: `system-inventory` (evidence-backed inventory of a repository) and `walkthrough-verify` (checks a story's claims against the code) | — |
 
 Load them in Claude Code by listing the plugin directories in `CLAUDE_CODE_PLUGIN_DIRS` (the `env` block of `~/.claude/settings.json`), or for one session with `claude --plugin-dir <dir>`. Install them in Antigravity with `agy plugin install <dir>`. Run a plugin's mod tests with `claude plugin test plugins/<name>`.
 

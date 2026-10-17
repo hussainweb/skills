@@ -1,4 +1,4 @@
-# system-walkthrough (draft)
+# system-walkthrough
 
 Builds a single-file, scroll-driven onboarding walkthrough of a codebase: a
 narrative column on the left, one pinned diagram on the right that grows,
@@ -130,6 +130,4 @@ purpose: they are context, not noise.
 - Dense scenes (around twenty shapes) are legible only with zoom; the Stele
   containers scene is the example to split.
 - `--fetch-d2` does not verify a checksum of the downloaded release.
-- The inventory brief that worked for the subagents lives in SKILL.md as
-  prose; it should ship as a file the skill can hand over verbatim.
 - No evals yet.
