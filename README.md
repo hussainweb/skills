@@ -69,6 +69,14 @@ Personal writing voice and note-taking conventions.
 | [logseq-organization](./skills/writing/logseq-organization/SKILL.md) | `npx skills add hussainweb/skills@logseq-organization` | Format and file Logseq notes to a specific vault's conventions — journals, tags, namespaces, and directory structure |
 | [capture-learning](./skills/writing/capture-learning/SKILL.md) | `npx skills add hussainweb/skills@capture-learning` | Capture technical realizations to Logseq as they surface in conversation — non-obvious behaviors, corrected assumptions, and debugged root causes |
 
+### Architecture
+
+Understand a system you did not fully write.
+
+| Skill | Install | Description |
+|-------|---------|-------------|
+| [system-walkthrough](./skills/architecture/system-walkthrough/SKILL.md) | `npx skills add hussainweb/skills@system-walkthrough` | Build a scroll-driven, single-file HTML onboarding tour of a codebase — C4-shaped scenes in D2, a pinned diagram that reveals, zooms and animates as the story scrolls, and every claim linked to the file and line that proves it |
+
 ## Plugins
 
 Some skills ship inside a plugin instead, alongside behaviour that only an agent's own plugin system can add. A plugin lives at `plugins/<name>/` and holds:

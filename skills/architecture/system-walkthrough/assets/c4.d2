@@ -1,0 +1,44 @@
+# Shared C4 vocabulary for walkthrough scenes. The build prepends this file to
+# every scene, so scenes only assign classes: `portal.class: container`.
+classes: {
+  person: {
+    shape: c4-person
+    style: {fill: "#C7D2FE"; stroke: "#3730A3"; font-color: "#1E1B4B"; stroke-width: 2; font-size: 18}
+  }
+  system: {
+    style: {fill: "#BFDBFE"; stroke: "#1E40AF"; font-color: "#0F172A"; border-radius: 10; stroke-width: 2; font-size: 20}
+  }
+  external: {
+    style: {fill: "#E2E8F0"; stroke: "#475569"; font-color: "#1E293B"; stroke-dash: 4; border-radius: 10; stroke-width: 2; font-size: 17}
+  }
+  container: {
+    style: {fill: "#DBEAFE"; stroke: "#1D4ED8"; font-color: "#0F172A"; border-radius: 8; stroke-width: 2; font-size: 18}
+  }
+  component: {
+    style: {fill: "#FFFFFF"; stroke: "#2563EB"; font-color: "#0F172A"; border-radius: 6; stroke-width: 2; font-size: 17}
+  }
+  datastore: {
+    shape: cylinder
+    style: {fill: "#D1FAE5"; stroke: "#047857"; font-color: "#052E16"; stroke-width: 2; font-size: 17}
+  }
+  bucket: {
+    shape: stored_data
+    style: {fill: "#D1FAE5"; stroke: "#047857"; font-color: "#052E16"; stroke-width: 2; font-size: 17}
+  }
+  queue: {
+    shape: queue
+    style: {fill: "#FEF3C7"; stroke: "#B45309"; font-color: "#451A03"; stroke-width: 2; font-size: 17}
+  }
+  boundary: {
+    style: {fill: "transparent"; stroke: "#64748B"; font-color: "#334155"; stroke-dash: 5; border-radius: 12; stroke-width: 2; font-size: 20}
+  }
+  node: {
+    style: {fill: "#F5F5F4"; stroke: "#44403C"; font-color: "#1C1917"; border-radius: 10; stroke-width: 2; font-size: 17}
+  }
+  edge: {
+    style: {stroke: "#334155"; font-color: "#1E293B"; stroke-width: 2; font-size: 15; italic: false}
+  }
+  warn: {
+    style: {stroke: "#B91C1C"; font-color: "#7F1D1D"; stroke-dash: 3; stroke-width: 2}
+  }
+}
