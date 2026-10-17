@@ -1,13 +1,13 @@
 ---
 name: beads-init
 description: >-
-  Set up the beads (`bd`) issue tracker with this author's settings: `bd init` with its commit amended (auto-export off, JSONL and gate-lock files gitignored, role set after asking maintainer or contributor, AGENTS.md and CLAUDE.md cut to a pointer at the beads skill), `bd bootstrap` on a fresh clone with the per-clone wiring redone and bootstrap's stray edits undone, or completing a repo that already has `.beads/` but is missing some of that (editor integrations skipped, settings never applied, an older init). Invoked only by the user via /beads-init; never trigger this on your own, even when a repo has no `.beads/` or a clone is missing its database.
+  Set up the beads (`bd`) issue tracker with this author's settings: `bd init` with its commit amended (auto-export off, JSONL and gate-lock files gitignored, role set after asking maintainer or contributor, AGENTS.md and CLAUDE.md cut to a pointer at the beads skill), `bd bootstrap` on a fresh clone with the per-clone wiring redone, ignore patterns bd added kept and committed, and its other stray edits undone, or completing a repo that already has `.beads/` but is missing some of that (editor integrations skipped, settings never applied, an older init). Invoked only by the user via /beads-init; never trigger this on your own, even when a repo has no `.beads/` or a clone is missing its database.
 disable-model-invocation: true
 argument-hint: "[issue prefix, when initializing]"
 allowed-tools: Bash, Read, Grep, Glob, Edit, AskUserQuestion
 metadata:
   authors: "Hussain Abbas"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Initializing, bootstrapping and completing beads
@@ -17,7 +17,8 @@ CLAUDE.md and editor integrations, and **commits all of it itself**. There is no
 the commit (checked against bd 1.3.1), so the way to get the settings this author wants into
 that commit is to apply them right after init and amend. `bd bootstrap` is the counterpart
 for a clone that already tracks `.beads/`: it clones the Dolt database from the git origin,
-but it does not restore the per-clone wiring, and it may edit a tracked file on the way.
+but it does not restore the per-clone wiring, and it may edit a tracked file on the way:
+ignore patterns it appends are kept and committed, anything else it changes is reverted.
 A repo can also sit between the two: `.beads/` and its database exist, but some of what init
 would have written is missing (`--skip-agents`, `--skip-hooks`, an init older than the skill
 installer, or this skill's settings never applied). `bd init` refuses to run there, and the
@@ -84,6 +85,7 @@ look for another way to run init.
 | `export.auto: false` | `.beads/config.yaml` (committed) | JSONL export is for viewers and interchange, not sync or backup. Off is bd's default, but the explicit line survives a default change and makes the choice visible. |
 | `*.jsonl` ignored inside `.beads/` | `.beads/.gitignore` (committed) | `issues.jsonl`, `events.jsonl`, `interactions.jsonl` are derived from Dolt. bd does not ignore them because bootstrap can fall back to a tracked JSONL, but with export off and Dolt data pushed to the origin that fallback is never used. |
 | `*.gate.lock*` ignored | root `.gitignore` and `.beads/.gitignore` (committed) | `.beads.gate.lock` in the root and `.beads/*.gate.lock` are runtime locks. bd 1.3.x ignores them already; verify rather than assume, older inits did not. |
+| Ignore patterns bd adds later | `.beads/.gitignore` and root `.gitignore` (committed) | A newer bd may append patterns it now requires, marked `# Added by bd (missing required patterns)` (1.3.1 adds `dolt-server-config.yaml` on bootstrap). They are bd's own files that bd wants out of the repo, so they belong in the ignore file: keep them and commit them, so the next clone's bootstrap finds nothing to add. |
 | `beads.role` | `.git/config` (**local, never committed**) | `maintainer` by default. When initializing or completing, ask whether this is the user's own repo or a fork they contribute to, and use `contributor` for the fork; when bootstrapping, it is always `maintainer`; when completing a repo where it is already set, keep it. bd reads the role only from git config, not from `config.yaml`, which is why a fresh clone prints `warning: beads.role not configured (GH#2950)` on every command until it is set again. |
 | Editor integrations present | `.agents/skills/beads/`, `.claude/settings.json`, `.codex/`, `.cursor/` (committed) | What `bd init` installs unless `--skip-agents`: the `beads` skill the pointer below refers to, plus the session hooks that run `bd prime`. Without the skill the pointer points at nothing. Unless the user has said they don't want them, they belong in the repo. |
 | AGENTS.md and CLAUDE.md are a short pointer | both files (committed) | Init writes a long beads section that repeats what `bd prime` prints and what the installed `beads` skill says. A pointer at `.agents/skills/beads/SKILL.md` keeps one source, the one bd maintains. Initialize and Complete; text in `assets/agents-section.md`. |
@@ -113,6 +115,7 @@ bd <version>, prefix <prefix> (initialize only)
 - committed as <hash> "chore(beads): complete the beads setup" (complete only; or "nothing to commit, already set up")
 
 ### Footprint (bootstrap only)
+- kept the ignore patterns bd <version> appended to <.beads/.gitignore | .gitignore>, committed as <hash> "chore(beads): ignore <pattern> added by bd bootstrap"
 - reverted .beads/config.yaml (bootstrap added sync.remote; bd re-adds it on first push)
 - working tree otherwise as before
 
@@ -125,5 +128,5 @@ bd <version>, prefix <prefix> (initialize only)
 ```
 
 Lead with anything that needs the user's attention: a prefix or role chosen by default, a file
-bootstrap changed that you reverted, a plan that would have created an empty database, or a
+bootstrap changed that you reverted or committed, a plan that would have created an empty database, or a
 state the decision table told you to stop and ask about.

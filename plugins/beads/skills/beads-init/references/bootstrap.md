@@ -41,19 +41,35 @@ bd hooks list
 
 If the user has said they don't want the git hooks, skip `bd hooks install` and say so.
 
-## B4. Undo bootstrap's footprint
+## B4. Sort bootstrap's footprint
 
-The only thing bootstrap should have added is the database under `.beads/embeddeddolt/` (ignored) and its lock files (ignored).
+The only things bootstrap should have added are the database under `.beads/embeddeddolt/`
+(ignored) and its lock files (ignored). It may also have appended to a tracked file; what
+happens to that depends on which file and what it added.
 
 ```bash
 git status --porcelain | diff /tmp/beads-bootstrap-before -
+git diff -- .beads/.gitignore .gitignore .beads/config.yaml
 ```
+
+- **`.beads/.gitignore` or root `.gitignore` changed, adding only ignore patterns** (bd marks
+  them `# Added by bd (missing required patterns)`; 1.3.1 adds `dolt-server-config.yaml`): a
+  newer bd wants more of its own files out of the repo, and that is right. Keep the lines and
+  commit them on their own, so the next clone's bootstrap finds nothing to add. bd does not
+  re-add them on ordinary commands, so reverting would only hand the same edit to the next
+  bootstrap.
+
+  ```bash
+  git add .beads/.gitignore .gitignore
+  git commit -m "chore(beads): ignore <pattern> added by bd <version> bootstrap"
+  ```
 
 - **`.beads/config.yaml` modified, adding only `sync.remote`:** bootstrap wrote the origin
   URL because it was not committed yet. Revert it with `git checkout -- .beads/config.yaml`.
   Nothing is lost: bootstrap and `bd dolt push` both detect the remote from the git origin,
   and the first push commits `sync.remote` itself. Say in the report that this happened.
-- **Any other tracked file changed:** show the diff, revert it (`git checkout -- <file>`),
+- **Any other tracked file changed** (or an ignore file changed in some other way than appending
+  patterns): show the diff, revert it (`git checkout -- <file>`),
   and report it. Only revert files that were clean in the B1 snapshot; a file the user had
   already modified is theirs.
 - **New untracked, non-ignored files:** list them in the report and leave them; deleting is
@@ -63,6 +79,7 @@ git status --porcelain | diff /tmp/beads-bootstrap-before -
 
 ```bash
 git status --porcelain | diff /tmp/beads-bootstrap-before -   # empty
+git log --oneline -1                                           # the ignore commit from B4, if it made one
 git config beads.role                                          # maintainer
 bd ready                                                       # runs; no warnings
 ```

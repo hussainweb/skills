@@ -19,7 +19,7 @@
   {
     "id": 2,
     "prompt": "I just cloned my notes repo on this laptop; it already uses beads. Get it working.",
-    "expected_output": "The agent recognises the bootstrap case (`.beads/` tracked, no database directory), does not run `bd init`, snapshots `git status --porcelain`, chmods `.beads` to 700, checks the origin for `refs/dolt/data`, shows `bd bootstrap --dry-run`, then runs `bd bootstrap --yes`. It sets `git config beads.role maintainer` and installs the git hooks, then compares the working tree to the snapshot: a `sync.remote` addition to `.beads/config.yaml` is reverted with `git checkout` and explained; nothing else is committed. It verifies with `bd ready` and reports.",
+    "expected_output": "The agent recognises the bootstrap case (`.beads/` tracked, no database directory), does not run `bd init`, snapshots `git status --porcelain`, chmods `.beads` to 700, checks the origin for `refs/dolt/data`, shows `bd bootstrap --dry-run`, then runs `bd bootstrap --yes`. It sets `git config beads.role maintainer` and installs the git hooks, then compares the working tree to the snapshot: ignore patterns bd appended to `.beads/.gitignore` or `.gitignore` are kept and committed on their own; a `sync.remote` addition to `.beads/config.yaml` is reverted with `git checkout` and explained; nothing else is committed. It verifies with `bd ready` and reports.",
     "assertions": [
       "chooses_bootstrap_not_init_for_a_tracked_beads_directory_without_a_database",
       "snapshots_git_status_before_bootstrap_and_compares_after",
@@ -27,6 +27,7 @@
       "runs_bootstrap_dry_run_before_bootstrap_yes",
       "sets_git_config_beads_role_maintainer_on_the_clone_without_asking",
       "reverts_a_sync_remote_change_to_config_yaml_and_explains_why_nothing_is_lost",
+      "keeps_and_commits_ignore_patterns_bd_appended_rather_than_reverting_them",
       "verifies_with_bd_ready_and_no_warnings"
     ],
     "files": []
