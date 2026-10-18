@@ -25,13 +25,13 @@ Modern Drupal development skills following Drupal 12 (and 11.5) and PHP 8.5 stan
 | [drupal-theme-review](./skills/drupal/drupal-theme-review/SKILL.md) | `npx skills add hussainweb/skills@drupal-theme-review` | Review Drupal theme code — Twig templates, libraries, OOP theme hooks, JS behaviors, SDC, accessibility, and responsive images |
 | [drupal-upgrade](./skills/drupal/drupal-upgrade/SKILL.md) | `npx skills add hussainweb/skills@drupal-upgrade` | Guide a Drupal major version upgrade end to end, including 11 → 12 — readiness assessment, deprecation scanning, compatibility fixes, and upgrade planning |
 
-### DDEV
+### Development tooling
 
-Local development environment management with DDEV.
+The environment a project runs in and the toolchain around it, wherever development happens: on a laptop, in a cloud workspace, or in CI.
 
 | Skill | Install | Description |
 |-------|---------|-------------|
-| [ddev](./skills/ddev/ddev/SKILL.md) | `npx skills add hussainweb/skills@ddev` | Guide command execution in DDEV-based projects — route commands through containers, manage add-ons, and configure services |
+| [ddev](./skills/tooling/ddev/SKILL.md) | `npx skills add hussainweb/skills@ddev` | Guide command execution in DDEV-based projects — route commands through containers, manage add-ons, and configure services |
 
 ### Coolify
 
