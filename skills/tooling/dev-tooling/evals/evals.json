@@ -1,0 +1,80 @@
+[
+  {
+    "id": 1,
+    "prompt": "Check the dev tooling in this project and tell me what's missing.",
+    "expected_output": "The agent runs python3 scripts/detect.py, loads only the catalogs for the detected layers plus universal.md and agent.md, and prints a status table with tool, location, tier, scope, status and action. It changes no files and lists the ask-tier items with a reason each.",
+    "assertions": [
+      "runs_detect_script_first",
+      "loads_only_matching_catalogs",
+      "prints_status_table",
+      "makes_no_changes_in_check_mode"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "Set up the dev tooling for this Drupal site. It runs on DDEV and the theme in web/themes/custom/site already uses ESLint and Stylelint.",
+    "expected_output": "The agent routes Composer and npm through ddev, installs drupal/core-dev (or confirms coder and phpstan-drupal), writes phpcs.xml.dist and phpstan.neon.dist against the real webroot, records the theme's built CSS and build command for the wallace skill, offers the Project Wallace Stylelint preset only as an ask because the theme's Stylelint is pinned to an old major, and reports oxlint as an ask instead of removing ESLint. It ignores the scaffolded web/.eslintrc.json, writes .jscpd.json ignoring core and contrib, sets up .serena/project.yml with the php server, installs drupal/ai_best_practices at @dev after reading any existing AGENTS.md, and runs each tool's verify step, reporting counts without fixing findings.",
+    "assertions": [
+      "uses_ddev_for_composer_and_npm",
+      "does_not_remove_eslint",
+      "treats_stylelint_preset_as_ask",
+      "ignores_scaffolded_webroot_files",
+      "configures_serena_with_php",
+      "reports_first_run_counts_without_fixing",
+      "installs_drupal_ai_best_practices"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "New TypeScript project, pnpm. Initialize everything I usually use.",
+    "expected_output": "The agent installs typescript@^7, oxlint with oxlint-tsgolint and typeAware in the root .oxlintrc.json, fallow with .fallowrc.json, and jscpd with .jscpd.json, all with pnpm as dev dependencies, and adds lint, health and dupes scripts. It creates .serena/project.yml with the typescript server, registers the fallow MCP server in .mcp.json via pnpm exec, and does not run fallow agent install. oxfmt is offered as an ask.",
+    "assertions": [
+      "uses_pnpm",
+      "installs_typescript_7",
+      "enables_type_aware_oxlint",
+      "registers_fallow_mcp_in_mcp_json",
+      "does_not_run_fallow_agent_install",
+      "offers_oxfmt_as_ask"
+    ],
+    "files": []
+  },
+  {
+    "id": 4,
+    "prompt": "This Python project uses Poetry and mypy. Bring the tooling up to my standard.",
+    "expected_output": "The agent detects the python layer, keeps Poetry and mypy, and reports converting to uv and adding ty as asks with reasons. It adds Ruff only if no Ruff, Black or Flake8 is present, otherwise reports it as an ask.",
+    "assertions": [
+      "does_not_convert_poetry_unasked",
+      "does_not_replace_mypy_unasked",
+      "explains_asks_with_reasons"
+    ],
+    "files": []
+  },
+  {
+    "id": 5,
+    "prompt": "Check the tooling on this Drupal 10 site. DDEV isn't running and I haven't run composer install yet.",
+    "expected_output": "The agent does not start DDEV in check mode. It says at the top that statuses come from composer.json and composer.lock because vendor is not installed and verification is deferred. Coder and phpstan-drupal that arrive transitively through a quality meta-package count as present, and drupal/core-dev is reported as optional rather than added. Existing GrumPHP orchestration is noted, so no parallel Composer scripts are proposed, and a gitignored /*.dist pattern leads it to target phpstan.neon rather than phpstan.neon.dist. Tool versions follow Drupal 10, not Drupal 12.",
+    "assertions": [
+      "does_not_start_ddev_in_check_mode",
+      "states_evidence_basis_when_not_installed",
+      "counts_transitive_tools_as_present",
+      "respects_existing_grumphp_pipeline",
+      "respects_gitignored_dist_names",
+      "matches_installed_drupal_version"
+    ],
+    "files": []
+  },
+  {
+    "id": 6,
+    "prompt": "Set up the tooling for this Laravel app on DDEV.",
+    "expected_output": "The agent confirms Pint and Larastan, installs laravel/boost if missing, and asks the user to run the interactive boost:install themselves through DDEV rather than running it in its own shell. It adds boost:update to post-update-cmd, keeps .ai/rules committed, follows the project's existing choice on gitignoring generated Boost files, and lists the Laravel LSP as a machine-scope install.",
+    "assertions": [
+      "installs_laravel_boost",
+      "hands_interactive_installer_to_user",
+      "adds_boost_update_hook",
+      "treats_laravel_lsp_as_machine_scope"
+    ],
+    "files": []
+  }
+]
