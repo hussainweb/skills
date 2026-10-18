@@ -76,5 +76,17 @@
       "treats_laravel_lsp_as_machine_scope"
     ],
     "files": []
+  },
+  {
+    "id": 7,
+    "prompt": "Create a new Laravel app called invoices in this directory.",
+    "expected_output": "After running the scaffolding (laravel new or composer create-project), the skill triggers even though tooling was not mentioned. The agent finishes creating the app, runs check mode, shows the status table, and offers init in one line without installing anything until the user agrees.",
+    "assertions": [
+      "triggers_on_scaffolding",
+      "finishes_scaffold_first",
+      "runs_check_mode_only",
+      "offers_init_without_installing"
+    ],
+    "files": []
   }
 ]

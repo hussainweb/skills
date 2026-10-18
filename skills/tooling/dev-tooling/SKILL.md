@@ -1,6 +1,6 @@
 ---
 name: dev-tooling
-description: Check or set up a project's development toolchain for its tech stack — linters, type checkers, duplication and dead-code detection, CSS measurement with Project Wallace, and the language servers and MCP servers the coding agent uses. Use this skill whenever the user starts a new project or opens an existing one and wants its tooling checked, initialized, audited or brought up to their standard, or says "set up the dev tooling", "check the tooling", "what tools is this project missing", "init the linters", "add jscpd / oxlint / fallow / ty", "set up Serena for this project", "wire up the LSP", or "configure this repo for the agent". Detects JavaScript, TypeScript, CSS, PHP, Drupal, Laravel and Python and composes their catalogs, including framework agent guidance (Drupal AI best practices, Laravel Boost). Works the same locally, in cloud workspaces and when wiring tools into CI. Not for fixing the findings those tools report, and not for Dependabot (that is dependabot-config).
+description: Check or set up a project's development toolchain for its stack — linters, type checkers, duplication and dead-code detection, CSS measurement with Project Wallace, and the language and MCP servers the agent uses. Use this skill whenever a project is created or scaffolded (npm create, create-next-app, composer create-project, laravel new, uv init, a new repository), even if tooling was not mentioned; when the user opens a project and wants its tooling checked, set up or brought to their standard; or on "set up the dev tooling", "what tools is this project missing", "init the linters", "add jscpd / oxlint / fallow / ty", "set up Serena", or "configure this repo for the agent". Covers JavaScript, TypeScript, CSS, PHP, Drupal, Laravel and Python, including Drupal AI best practices and Laravel Boost. Not for fixing the findings those tools report, nor for Dependabot (that is dependabot-config).
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 metadata:
   authors: "Hussain Abbas"
@@ -17,6 +17,7 @@ The catalog is the opinion; this file is only the loop. Tools, versions, configs
 
 - **Check** — report what is present, missing, partial or conflicting, with the planned action for each. Change nothing. Use it when the user asks to check, audit or list what is missing, or when the request does not say.
 - **Init** — check, then apply the plan and verify it. Use it when the user asks to set up, initialize, install or bring the project up to standard.
+- **After scaffolding** — when the skill was triggered by a project being created rather than by a request about tooling, finish the scaffolding first, then run check mode and offer init in one line. The user asked for a project, not a toolchain, so do not install anything until they agree.
 
 ## The loop
 
