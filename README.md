@@ -32,6 +32,7 @@ The environment a project runs in and the toolchain around it, wherever developm
 | Skill | Install | Description |
 |-------|---------|-------------|
 | [ddev](./skills/tooling/ddev/SKILL.md) | `npx skills add hussainweb/skills@ddev` | Guide command execution in DDEV-based projects — route commands through containers, manage add-ons, and configure services |
+| [wallace](./skills/tooling/wallace/SKILL.md) | `npx skills add hussainweb/skills@wallace` | Measure CSS with Project Wallace before and after a change and steer it by the numbers — fewer distinct token values, lower specificity, simpler selectors, less `!important` — with a summary script that keeps the analyzer's large JSON out of the agent's context |
 
 ### Coolify
 

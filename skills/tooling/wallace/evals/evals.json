@@ -1,0 +1,36 @@
+[
+  {
+    "id": 1,
+    "prompt": "Add a pricing card component to the theme. Keep the CSS consistent with what's already there.",
+    "expected_output": "Before writing CSS the agent builds or locates the compiled stylesheet, measures it by piping it into npx wallace-cli@4 --json, saves the JSON outside the repo, and runs summary.py with --values for font sizes, colors and shadows to reuse existing values. After writing the component it measures again, compares with the baseline, and reports the metrics that moved, explaining any new distinct value.",
+    "assertions": [
+      "pipes_css_into_wallace_cli",
+      "measures_baseline_before_editing",
+      "checks_existing_values_before_adding",
+      "reports_before_after_numbers"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "Audit our CSS. Is the design system consistent?",
+    "expected_output": "The agent measures the shipped CSS, notices vendor CSS inflating the counts if present and measures the authored CSS separately, runs --values for each flagged token category, and proposes a consolidation plan with target scales and value mappings. It does not change any CSS without agreement and treats unused custom properties as candidates to verify by searching the codebase.",
+    "assertions": [
+      "separates_vendor_from_authored_css",
+      "proposes_consolidation_without_applying",
+      "verifies_unused_before_recommending_removal"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "Refactor the header SCSS, it's full of !important and nested selectors.",
+    "expected_output": "The agent compiles the SCSS to CSS (via the project build or npx sass) rather than feeding SCSS to wallace-cli, records the baseline for !important ratio, specificity and selector complexity, refactors using classes, :where() and @layer instead of added specificity, and reports the before and after numbers for those metrics.",
+    "assertions": [
+      "compiles_scss_before_measuring",
+      "uses_cascade_tools_not_specificity",
+      "reports_important_and_specificity_deltas"
+    ],
+    "files": []
+  }
+]
