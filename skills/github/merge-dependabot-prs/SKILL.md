@@ -4,7 +4,7 @@ description: Merge open Dependabot pull requests in a GitHub repository using th
 allowed-tools: Bash, Read
 metadata:
   authors: "Hussain Abbas"
-  version: "1.3.0"
+  version: "1.4.0"
 ---
 
 # Merge Dependabot PRs
@@ -134,9 +134,9 @@ Four classifications need judgement rather than blind application:
   51 test files, because 18 had landed after the branch was cut.
 
   If the counts differ, say so in the plan instead of quoting the green tick. The fix is
-  cheap — comment `@dependabot recreate` (see the rebase-vs-recreate guidance below for
-  which of the two), let it rebuild, and read CI on the new branch. Never hand-rebase to
-  close the gap.
+  cheap: post `@dependabot recreate` yourself, let it rebuild, and read CI on the new branch
+  — unless something other than Dependabot has committed to the branch (see "Rebuilding a
+  branch" below). Never hand-rebase to close the gap.
 
 - **`action_required` checks (workflows awaiting approval)** — a workflow run was triggered
   (typically because an automated pipeline step like a formatter, lockfile generator, or
@@ -195,34 +195,41 @@ failures. Common ones:
 | `action_required` / workflow approval required | Pipeline commit triggered a follow-up run that paused for approval | Ask user for confirmation, then approve with `gh api` and watch to completion (see below) |
 | Review required | Branch protection wants an approval | Report it; do not self-approve or use `--admin` without being asked |
 
-### Don't reach for `@dependabot rebase` by reflex
+### Rebuilding a branch: recreate, don't rebase
 
 Dependabot rebases its own open PRs when the base branch moves — that is the default
 `rebase-strategy`. So for the ordinary mid-batch conflict, the right move is to report the
 PR as needing another pass and stop there. Commenting adds noise and buys nothing, because
 the rebase was already coming.
 
-Comment `@dependabot rebase` only when there is a reason to think the automatic pass is not
-coming: a PR that has been sitting long enough to have gone stale, or one that is still
-conflicted well after an earlier merge should have triggered a rebase.
-
-Before deciding between those, look at who has committed to the branch — it is the fact that
-separates "leave it alone" from "nudge it" from "this needs the user":
+A branch needs a nudge when there is reason to think the automatic pass is not coming or not
+enough: a PR stale enough that its green checks ran against an older base (step 2), or one
+still conflicted well after an earlier merge should have triggered a rebase. When you reach
+that judgement, act on it — don't just recommend a rebase and leave the user to type it.
+First look at who has committed to the branch, because that decides what you send:
 
 ```bash
 gh pr view <n> --json commits --jq '[.commits[].authors[].login] | unique'
 ```
 
-There is a case where rebase is the wrong instruction entirely. If anything other than
-Dependabot has pushed to the branch — most often a workflow step that commits back to the
-PR, like a lockfile regenerator or a formatter — Dependabot stops rebasing it, precisely so
-it doesn't clobber that work. Commenting `@dependabot rebase` there does nothing at all.
-What that PR needs is `@dependabot recreate`, which rebuilds it from scratch.
+**Only Dependabot** — post the recreate yourself, no confirmation needed:
 
-That is a heavier action, because recreating discards whatever those extra commits added, so
-it is the user's call rather than yours. When the author list contains anything other than
-Dependabot, say so and ask — don't quietly recreate, and don't leave the user thinking a
-rebase comment is going to fix it.
+```bash
+gh pr comment <n> --body "@dependabot recreate"
+```
+
+Send `recreate`, not `rebase`. On a branch only Dependabot has touched there is nothing for a
+recreate to discard, and it rebuilds the update from scratch against today's base —
+regenerating the lockfile rather than replaying an old one — so it fixes both staleness and
+conflicts where a rebase can stall on the latter. Say in the summary which PRs you sent it to;
+their CI will rerun, so they are not mergeable in this run.
+
+**Anything other than Dependabot** — send nothing. Most often this is a workflow step that
+commits back to the PR, like a lockfile regenerator or a formatter. Dependabot stops rebasing
+such a branch precisely so it doesn't clobber that work, so `@dependabot rebase` is a no-op
+there. `@dependabot recreate` would work, but it discards whatever those extra commits added,
+which makes it the user's call rather than yours. Name the PR and the extra authors, explain
+that a rebase won't help, and ask whether to recreate.
 
 Never rebase a Dependabot branch by hand. Dependabot owns these branches and hand-rebasing
 puts you in exactly the "someone else pushed to it" state described above, which stops the
@@ -307,9 +314,10 @@ for that.
 
 Check staleness here too (step 2). A major that has been sitting is exactly where a green
 tick is least trustworthy and where it carries the most weight in the write-up, so say which
-base the checks actually ran against. If the branch is stale, `@dependabot recreate` and
-reading CI on the rebuilt branch is usually worth the wait before you write the assessment —
-otherwise you are grading the upgrade on a suite that no longer matches the project.
+base the checks actually ran against. If the branch is stale, post `@dependabot recreate`
+(subject to the author check in "Rebuilding a branch") and read CI on the rebuilt branch
+before you write the assessment — otherwise you are grading the upgrade on a suite that no
+longer matches the project.
 
 Start with the bundled script, which gathers the evidence Dependabot already attached to
 the PR:
@@ -396,9 +404,10 @@ between the changelog and their own code, and that is the whole value of this st
 Finish with a short factual summary, in the same plain grouped-bullet form as the plan:
 
 - Merged: PR numbers with the dependency and version range.
-- Needs another pass: PRs that hit conflicts. Say whether Dependabot will rebase them on its
-  own (the usual case, so nothing is owed from the user but patience) or whether they are
-  waiting on a decision from them, such as a branch that needs recreating.
+- Needs another pass: PRs that hit conflicts or went stale. Say which of three states each is
+  in: Dependabot will rebase it on its own (the usual case, nothing owed but patience), you
+  posted `@dependabot recreate` on it, or it is waiting on the user's decision because a
+  recreate would discard someone else's commits.
 - Awaiting approval: PRs with workflow runs waiting on maintainer approval, naming the
   triggering commit and explaining what is needed.
 - Held back: the majors, each with its assessment from step 5. Security-labelled ones go
