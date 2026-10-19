@@ -1,8 +1,24 @@
 # Documentation index
 
-How to fill a Grounded Docs server with the documentation a project's stack needs, at the versions the project uses. Load this file only when the user has opted into the server, as `agent.md` describes.
+How to fill a Grounded Docs server with the documentation a project's stack needs, at the versions the project uses. Load this file when a detected framework has a recipe below, or a server is registered.
 
 The server does the crawling, conversion and search. It does not know where a library's documentation lives, and a crawl with the wrong start URL or scope reports `completed` after indexing one page. The recipes below are the settings that are known to work; do not improvise a crawl for a framework that has one.
+
+## Status rows
+
+Add one row to the status table for each detected framework that has a recipe, with "Where" set to `agent`:
+
+| Tool | Where | Tier | Scope | Status | Action |
+|---|---|---|---|---|---|
+| Laravel 12 docs | agent | ask | agent | missing | ask: index with the Laravel recipe |
+
+- **No server registered:** do not add these rows. The server entry in `agent.md` is the ask, and its reason names these frameworks.
+- **present:** the server has the framework at the project's major, as `find_version` reports.
+- **outdated:** only an older major is indexed. Searches would fall back to it silently.
+- **missing:** not indexed at all.
+- **unsettled:** the recipe has no tested crawl yet, as with Drupal. Report it with the reason in one line; there is nothing to offer.
+
+In check mode, these rows come from `list_libraries` and `find_version`, which only read the index. In init mode, each missing or outdated row is an ask, run through the loop below.
 
 ## The loop
 
