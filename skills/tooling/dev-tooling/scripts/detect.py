@@ -316,7 +316,7 @@ if IN_GIT:
 
 # --- Machine ----------------------------------------------------------------------------
 for b in ("node", "npm", "pnpm", "composer", "php", "uv", "serena", "claude", "go",
-          "laravel-lsp", "intelephense", "phpactor", "ddev"):
+          "laravel-lsp", "intelephense", "phpactor", "ddev", "semble"):
     out(f"bin.{b}", "yes" if shutil.which(b) else "no")
 if shutil.which("serena"):
     out("bin.serena.version", run("serena", "--version")[1].removeprefix("Serena ").strip())

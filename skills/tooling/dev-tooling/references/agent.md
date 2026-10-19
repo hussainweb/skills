@@ -78,6 +78,25 @@ Claude Code can run language servers itself through plugins. They give post-edit
   When two enabled servers claim the same extension, the first registered wins and the other is skipped with a warning. So `laravel-lsp` and `php-lsp` cannot both serve `.php`; pick one. Whether a compound extension like `.blade.php` matches is unverified; check `/plugin` for errors after installing.
 - Do not build such a plugin as part of a toolchain pass. Propose it, and build it only when asked.
 
+## Semble
+
+Searches code by meaning, such as "where is authentication handled?", and returns the matching chunks instead of whole files. It fills the gap between Serena, which needs a symbol name, and Grep, which needs the literal text. It runs on CPU with a small local model: no API keys, no GPU, no server to run.
+
+- **Tier:** ask, when the codebase is large or the user did not write most of it, such as an inherited Drupal or Laravel site. Skip it for a small project the user knows well; Grep and Serena already cover that. It is still before 1.0, so it is not a default.
+- **Scope:** machine. The program, the sub-agent and the per-repository index cache all live outside the project, so nothing is committed. Name it as a machine-scope install before running it.
+- **Present when:** `semble` is on `PATH` (the detect script prints `bin.semble`) and `~/.claude/agents/semble-search.md` exists, or `claude mcp get semble` shows a server.
+- **Install:**
+
+```sh
+uv tool install semble
+semble install --agent claude --type subagent --yes
+```
+
+  Prefer the `semble-search` sub-agent over the MCP server: it keeps search results out of the main context and adds no tools to every session. Install the MCP server (`--type mcp`, user scope) only if the user asks.
+- **Upgrade:** `semble install` pins the installed version into what it writes, so after `uv tool upgrade semble` rerun the install command to update the pin.
+- **Ignored files:** Semble skips whatever `.gitignore` ignores, plus `node_modules` and similar. In a Drupal project that means core and contrib are not indexed, which suits searching custom code. Add a `.sembleignore` (gitignore syntax) only for generated code the project commits.
+- **Verify:** `semble search "<a concept from this project>" .` returns snippets from the project's own code. The first run downloads the model, so it needs network access.
+
 ## Framework agent guidance
 
 Some frameworks ship their own guidance packages for agents: guidelines, skills and sometimes an MCP server. They live in the framework catalogs, because they install through the framework's package manager:
