@@ -4,6 +4,8 @@ Applies to each directory with a `package.json`. Treat every manifest directory 
 
 The direction for this layer: TypeScript 7 with its native compiler and language server, oxlint instead of ESLint, and Fallow for codebase health.
 
+**Vite+.** A package with `vite-plus` as a dependency already has oxlint and oxfmt: Vite+ bundles both and configures them in `vite.config.*` under `lint` and `fmt` (the detect script prints `config.vite-plus[...]` with the blocks it found and whether `typeAware` is on). `vp lint`, `vp fmt` and `vp check` (format check, lint and type check together) run them. So a `lint` block counts as oxlint present, an `fmt` block as oxfmt present, and `lint.options.typeAware` as type-aware rules on. Do not add `oxlint`, `oxfmt` or `.oxlintrc.json` alongside it, and do not add a `lint` script; the project's check command is already `vp check`. Fallow and jscpd are not part of Vite+ and still apply.
+
 ## TypeScript 7
 
 - **Tier:** always for a new TypeScript project; ask when upgrading an existing one below 7.

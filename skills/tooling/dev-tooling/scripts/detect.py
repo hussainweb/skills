@@ -23,7 +23,8 @@ PRUNE = {"node_modules", "vendor", ".git", "dist", "build", ".ddev", ".serena"}
 JS_TOOLS = ["typescript", "@typescript/native-preview", "oxlint", "oxlint-tsgolint", "oxfmt",
             "eslint", "prettier", "@biomejs/biome", "fallow", "jscpd", "stylelint",
             "@projectwallace/stylelint-plugin", "typescript-eslint", "gulp-typescript",
-            "@playwright/test", "storybook", "@storybook/addon-mcp", "@spotlightjs/spotlight"]
+            "@playwright/test", "storybook", "@storybook/addon-mcp", "@spotlightjs/spotlight",
+            "vite-plus"]
 JS_FRAMEWORKS = ["vue", "svelte", "astro", "@angular/core", "next", "react"]
 PHP_TOOLS = ["drupal/core", "drupal/core-recommended", "drupal/core-dev", "drupal/coder",
              "phpstan/phpstan", "mglaman/phpstan-drupal", "phpstan/extension-installer",
@@ -265,6 +266,14 @@ for name, rx in CONFIGS.items():
     scaf = [h for h in hits if scaffolded(h)]
     out(f"config.{name}", ", ".join(own))
     out(f"config.{name}.scaffolded", ", ".join(scaf))
+# Vite+ bundles oxlint and oxfmt and configures them in vite.config.* under `lint` and `fmt`.
+for f in sorted(matching(r"(^|/)vite\.config\.[cm]?[jt]s$"), key=lambda p: (p.count("/"), p))[:6]:
+    text = (ROOT / f).read_text(errors="replace")
+    if not re.search(r"""from\s+["']vite-plus["']""", text):
+        continue
+    blocks = [b for b in ("lint", "fmt", "test", "run", "staged") if re.search(rf"^\s*{b}\s*:", text, re.M)]
+    aware = "yes" if re.search(r"typeAware\s*:\s*true", text) else "no"
+    out(f"config.vite-plus[{f}]", f"blocks={' '.join(blocks)} typeAware={aware}")
 py = (ROOT / "pyproject.toml").read_text() if (ROOT / "pyproject.toml").exists() else ""
 for t in ("ruff", "ty", "mypy", "pyright"):
     if re.search(rf"^\[tool\.{t}", py, re.M):
@@ -286,6 +295,10 @@ ORCH = {
 }
 for name, rx in ORCH.items():
     out(f"orchestrator.{name}", ", ".join(matching(rx, 4)))
+mise = (ROOT / "mise.toml").read_text(errors="replace") if (ROOT / "mise.toml").exists() else ""
+out("orchestrator.mise-tasks", " ".join(re.findall(r"^\[tasks\.([\w:-]+)\]", mise, re.M))[:300])
+if IN_GIT:
+    out("orchestrator.git-hooks-path", run("git", "config", "core.hooksPath")[1])
 
 # --- Gitignore rules that change where configs can live --------------------------------
 if IN_GIT:
