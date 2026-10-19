@@ -91,7 +91,7 @@ Both manage a marked region inside `AGENTS.md` or `CLAUDE.md` and leave the rest
 
 A [Grounded Docs](https://github.com/arabold/docs-mcp-server) server indexes documentation by library version and serves search over MCP, so the agent answers from the docs for the version the project uses instead of from training data. It matters most for frameworks newer than the model's knowledge. The user runs the server themselves; this catalog has no URL for it.
 
-- **Tier:** ask, once per user. Offer it when no such server is registered, and say the user needs one running. If they decline, do not offer it again in the same session.
+- **Tier:** ask, when no such server is registered and the project uses a framework with a recipe in `docs-index.md`. Give the reason in terms of this project: name the frameworks and versions the server would index, such as "Laravel 12 and Next.js 16 have recipes". Say the user needs a server running; the skill cannot start one. If they decline, do not offer it again in the same session.
 - **Present when:** `claude mcp list` shows a server whose tools include `search_docs` and `scrape_docs`. The name is the user's choice; `grounded-docs` is the suggestion.
 - **Register:** ask for the server's MCP URL, the one ending in `/mcp`. If the user gives an `/sse` URL, ask for the `/mcp` one instead: the SSE transport is deprecated. Register it at user scope, since one server serves every project:
 

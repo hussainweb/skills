@@ -102,5 +102,17 @@
       "verifies_with_check_queries"
     ],
     "files": []
+  },
+  {
+    "id": 9,
+    "prompt": "Check the tooling on this Next.js 16 project.",
+    "expected_output": "With no Grounded Docs server registered, the status table includes the documentation index as an ask even though the user never mentioned documentation, and its reason names Next.js 16 as having a recipe. The agent says the user needs a server running and adds no per-framework docs rows. If a server is registered, it instead adds a Next.js 16 docs row whose status comes from list_libraries and find_version, and it scrapes nothing in check mode.",
+    "assertions": [
+      "offers_docs_index_unprompted",
+      "reason_names_detected_framework",
+      "no_framework_rows_without_server",
+      "does_not_scrape_in_check_mode"
+    ],
+    "files": []
   }
 ]
