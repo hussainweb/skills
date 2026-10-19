@@ -1,6 +1,6 @@
 ---
 name: dev-tooling
-description: Check or set up a project's development toolchain for its stack — linters, type checkers, duplication and dead-code detection, CSS measurement with Project Wallace, and the language and MCP servers the agent uses. Use this skill whenever a project is created or scaffolded (npm create, create-next-app, composer create-project, laravel new, uv init, a new repository), even if tooling was not mentioned; when the user opens a project and wants its tooling checked, set up or brought to their standard; or on "set up the dev tooling", "what tools is this project missing", "init the linters", "add jscpd / oxlint / fallow / ty", "set up Serena", or "configure this repo for the agent". Covers JavaScript, TypeScript, CSS, PHP, Drupal, Laravel and Python, including Drupal AI best practices and Laravel Boost. Not for fixing the findings those tools report, nor for Dependabot (that is dependabot-config).
+description: Check or set up a project's development toolchain for its stack — linters, type checkers, duplication and dead-code detection, CSS measurement with Project Wallace, and the language and MCP servers the agent uses. Use this skill whenever a project is created or scaffolded (npm create, create-next-app, composer create-project, laravel new, uv init, a new repository), even if tooling was not mentioned; when the user opens a project and wants its tooling checked, set up or brought to their standard; or on "set up the dev tooling", "what tools is this project missing", "init the linters", "add jscpd / oxlint / fallow / ty", "set up Serena", "index the docs for this project", or "configure this repo for the agent". Covers JavaScript, TypeScript, CSS, PHP, Drupal, Laravel and Python, including Drupal AI best practices and Laravel Boost. Not for fixing the findings those tools report, nor for Dependabot (that is dependabot-config).
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 metadata:
   authors: "Hussain Abbas"
@@ -30,6 +30,7 @@ The catalog is the opinion; this file is only the loop. Tools, versions, configs
    - `references/php.md` for `php`, then `references/drupal.md` or `references/laravel.md` when those layers are present. A framework file replaces the matching PHP entries.
    - `references/python.md` for `python`.
    - `references/agent.md` — always, last, because it depends on the layers above.
+   - `references/docs-index.md` — only when a Grounded Docs server is registered or the user opts into one, as `agent.md` describes.
 
 3. **Build the status table.** One row per catalog entry that applies. An entry applies when its layer is detected for that location; each catalog says when an entry is skipped instead, such as a formatter row when a formatter already exists.
 
