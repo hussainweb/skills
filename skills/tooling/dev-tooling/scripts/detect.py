@@ -130,8 +130,12 @@ for m in manifests:
     if "typescript" in deps or tsconfig:
         ts_any = True
     out(f"js[{d}]", f"pm={pm_for(d)} node_modules={'yes' if has_nm else 'no'} ts_files={ts_files} tsconfig={'yes' if tsconfig else 'no'}")
-    fws = [f for f in JS_FRAMEWORKS if f in deps]
-    out(f"js[{d}].frameworks", " ".join(fws))
+    fws = []
+    for f in JS_FRAMEWORKS:
+        if f in deps:
+            iv = installed_version(d, f) if has_nm else None
+            fws.append(f"{f}@{deps[f]}" + (f" (installed {iv})" if iv else ""))
+    out(f"js[{d}].frameworks", ", ".join(fws))
     tools = []
     for t in JS_TOOLS:
         if t in deps:

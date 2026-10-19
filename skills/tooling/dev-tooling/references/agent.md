@@ -87,6 +87,24 @@ Some frameworks ship their own guidance packages for agents: guidelines, skills 
 
 Both manage a marked region inside `AGENTS.md` or `CLAUDE.md` and leave the rest of the file alone. When the project already has hand-written agent files, read them first and say what the package will add.
 
+## Documentation index
+
+A [Grounded Docs](https://github.com/arabold/docs-mcp-server) server indexes documentation by library version and serves search over MCP, so the agent answers from the docs for the version the project uses instead of from training data. It matters most for frameworks newer than the model's knowledge. The user runs the server themselves; this catalog has no URL for it.
+
+- **Tier:** ask, once per user. Offer it when no such server is registered, and say the user needs one running. If they decline, do not offer it again in the same session.
+- **Present when:** `claude mcp list` shows a server whose tools include `search_docs` and `scrape_docs`. The name is the user's choice; `grounded-docs` is the suggestion.
+- **Register:** ask for the server's MCP URL, the one ending in `/mcp`. If the user gives an `/sse` URL, ask for the `/mcp` one instead: the SSE transport is deprecated. Register it at user scope, since one server serves every project:
+
+```sh
+claude mcp add --scope user --transport http grounded-docs <url>
+```
+
+  Use project scope, in `.mcp.json`, only when the user says the team shares the server. With authentication enabled on the server, the client needs a bearer token; follow the server's authentication docs rather than putting a token in `.mcp.json`.
+- **Read-only endpoint:** if the user runs a second instance in read-only mode, which offers search but no scrape or remove tools, register that one for everyday sessions and use the full one only for indexing.
+- **Before the first index:** vector search needs an embedding model configured on the server before documentation is indexed; documentation indexed without one gets no vectors until it is scraped again. Mention it once. Without embeddings, search matches words only, and a query phrased differently from the docs misses.
+- **Index:** follow `docs-index.md` for the detected frameworks. Each scrape is an ask, because the index is shared by everyone who uses the server.
+- **Verify:** `claude mcp list` shows the server connected, and `list_libraries` answers.
+
 ## MCP servers from project tools
 
 Register these in the project's `.mcp.json`, which is shared with the team. Merge into an existing file; never overwrite it. Claude Code ignores `mcpServers` in `.claude/settings.json` without an error, so do not put them there.

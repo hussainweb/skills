@@ -88,5 +88,19 @@
       "offers_init_without_installing"
     ],
     "files": []
+  },
+  {
+    "id": 8,
+    "prompt": "I run a Grounded Docs server on my tailnet. Hook it up for this Laravel 12 project without Boost and index what it needs. The URL is https://docs.example.ts.net/sse.",
+    "expected_output": "The agent asks for the /mcp URL instead of the /sse one, then registers the server at user scope with the http transport and not in .mcp.json. It reads laravel.framework from the detect script, calls list_libraries and find_version with 12.x, and offers the Laravel recipe from docs-index.md as an ask before scraping. When scraping, it uses the /framework/docs/12.x start URL with hostname scope and the include pattern, labels the version 12.0.0, polls get_job_info, and treats completed as unverified until the recipe's check queries return results from the expected pages.",
+    "assertions": [
+      "asks_for_mcp_url_not_sse",
+      "registers_at_user_scope",
+      "checks_index_before_scraping",
+      "asks_before_scraping",
+      "uses_laravel_recipe_arguments",
+      "verifies_with_check_queries"
+    ],
+    "files": []
   }
 ]
