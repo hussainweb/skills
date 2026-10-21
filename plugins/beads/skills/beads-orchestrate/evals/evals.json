@@ -57,13 +57,15 @@
   {
     "id": 5,
     "prompt": "My usage limit reset. All four agents died mid-task when it hit. Carry on where they left off.",
-    "expected_output": "Before resuming anything, the orchestrator should take stock: each checkout's git status and commits since the last merge, and bd show for each bead in flight. It should record on the epic what survived, including uncommitted work. It should resume the same agents with SendMessage rather than launching fresh ones, telling each what state it left, that its sub-agents are gone, and to sort complete from partial work instead of assuming it finished. Agents are told to commit verified work first, and if they can't finish, to leave a bead note with what's done, partial and next, and nothing uncommitted. The orchestrator must not assume or report outcomes for work it hasn't checked.",
+    "expected_output": "Before resuming anything, the orchestrator should take stock: each checkout's git status and commits since the last merge, and bd show for each bead in flight. It should record on the epic what survived, including uncommitted work. It should not send any message to the dead agents, not even a short one asking for a hand-off: each would re-send its whole context with no cache. Instead it writes the hand-off itself on each bead from the stock-take, the agent's last checkpoint note, its commits and `git diff --stat`: what is committed, what is uncommitted and partial, and the worktree path and branch. It then continues with fresh agents briefed from those notes, each with an explicitly chosen model tier and a tool-use budget, no more than three at a time. A fresh agent taking over a dirty worktree reviews the uncommitted changes against the note before committing or discarding them. It must not assume or report outcomes for work it hasn't checked.",
     "assertions": [
       "inspects_git_status_and_commits_in_each_checkout_before_resuming",
       "records_the_surviving_state_on_the_epic",
-      "resumes_the_same_agents_via_sendmessage_instead_of_new_agents",
-      "tells_agents_to_separate_complete_from_partial_work",
-      "tells_agents_to_commit_verified_work_first_and_leave_a_state_note",
+      "does_not_message_or_resume_the_dead_agents",
+      "writes_the_hand_off_notes_itself_from_git_and_checkpoint_notes",
+      "continues_with_fresh_agents_briefed_from_the_notes",
+      "tells_the_fresh_agent_to_review_uncommitted_changes_before_keeping_them",
+      "sets_a_model_tier_on_each_new_agent_and_respects_the_concurrency_cap",
       "does_not_claim_results_for_unverified_work"
     ],
     "files": []
@@ -96,7 +98,7 @@
   {
     "id": 8,
     "prompt": "Both wave-1 agents just reported: bd-41 and bd-42 are merged to main with green CI. Nothing else was in the plan. What now?",
-    "expected_output": "The orchestrator should not close out. It should re-run `bd ready` scoped to the epic, find that closing bd-41 and bd-42 unblocked further beads (and any children the agents filed), plan them as the next wave, and launch or resume agents for them, continuing a finished agent via SendMessage where the next bead is in its area. It only closes out when nothing in scope is ready or everything left needs the user, and says which.",
+    "expected_output": "The orchestrator should not close out. It should re-run `bd ready` scoped to the epic, find that closing bd-41 and bd-42 unblocked further beads (and any children the agents filed), plan them as the next wave, and launch or resume agents for them, continuing a finished agent via SendMessage where the next bead is in its area and the agent is still well under its tool-use budget (about 25 tool uses or fewer) and finished within the hour, and starting a fresh agent otherwise. It only closes out when nothing in scope is ready or everything left needs the user, and says which.",
     "assertions": [
       "re_runs_bd_ready_after_the_wave_lands",
       "launches_the_newly_unblocked_beads_instead_of_closing_out",
@@ -129,6 +131,25 @@
       "gives_each_agent_only_the_memories_that_apply_plus_the_standing_conventions",
       "tells_the_agent_it_can_search_bd_memories_itself",
       "records_the_passed_memory_keys_on_the_bead"
+    ],
+    "files": []
+  },
+  {
+    "id": 11,
+    "prompt": "Implement everything ready under epic bd-400 overnight. bd ready shows nine beads: bump three npm dependencies, fix typos in the docs, add a CSV export to the reports page as specced in the bead, write tests for the billing module, add a settings toggle, add a migration for a new column, find out why the e2e suite fails intermittently in CI, rework the auth middleware used by every route, and rename a config key.",
+    "expected_output": "The orchestrator plans by model tier, picking the cheapest tier that can do each agent's hardest bead, and maps the tiers onto the harness's own models rather than inheriting the session's. Mechanical beads (dependency bumps, typos, the config rename) go to the small tier, settled build work (the CSV export, tests, the toggle, the migration) to the mid tier, and the intermittent CI failure and the auth rework to the strong tier. The top tier is not used, since the user didn't ask for it. Every spawned agent has its model set explicitly. The plan note on the epic records each agent's model. Before launching, it tells the user the pace and tiers. No more than three agents run at once, and the rest are queued and launched as slots free. The auth rework spans every route, so it is split into child beads before launch. Every prompt carries a tool-use budget (about 50), tells the agent to stop at it even mid-bead with a checkpoint note, and to append a checkpoint note after every commit.",
+    "assertions": [
+      "assigns_a_model_tier_per_agent_by_its_hardest_bead",
+      "uses_the_small_tier_for_mechanical_beads",
+      "uses_the_strong_tier_only_for_beads_that_need_judgment",
+      "does_not_use_the_top_tier_unasked",
+      "sets_the_model_explicitly_on_every_spawned_agent",
+      "records_each_agents_model_in_the_plan_note",
+      "tells_the_user_the_pace_and_tiers_before_launching",
+      "runs_at_most_three_agents_at_once",
+      "splits_the_cross_cutting_bead_into_children_before_launch",
+      "gives_every_agent_a_tool_use_budget_with_a_mid_bead_checkpoint",
+      "prompts_require_a_checkpoint_note_after_each_commit"
     ],
     "files": []
   }

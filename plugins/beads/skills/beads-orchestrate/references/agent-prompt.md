@@ -62,6 +62,21 @@ does not re-open it:
 > Do not fan out into your own checkout. If you delegate to sub-agents, give each its own
 > worktree, or run them one at a time. Parallel writers in one working tree leave a
 > half-written shared state when anything interrupts them.
+>
+> Prefer doing the work yourself to delegating it. When you do spawn a sub-agent, set its
+> model explicitly to the cheapest tier that can do its job (a small, fast model for
+> searching and reading); left unset, it inherits yours and costs what you cost.
+>
+> **You have a budget of about `<budget, e.g. 50>` tool uses.** Everything you read stays
+> in your context and is re-sent on every request, so a long run costs far more than two
+> short ones. Keep count. When you reach the budget, stop where you are, even mid-bead:
+> commit what passes the gates, append a checkpoint note to the bead (what is committed,
+> what is uncommitted, the next step, the worktree path and branch), and report. A fresh
+> agent continues from your note. Don't start another bead past about half the budget.
+>
+> Keep what you read small: read the part of a file you need rather than all of it, run
+> gates and tests with quiet output and read only the failures, and don't re-read a file
+> or screenshot you have already seen.
 
 ## 5. Workspace setup (parallel agents in worktrees)
 
@@ -102,6 +117,9 @@ Every prompt, isolated or not, carries this hard stop:
 > - Commit atomically, one logical change per commit, as Conventional Commits. Commit each
 >   verified piece as soon as it passes; don't hold a large uncommitted change. Sessions can
 >   be cut off without warning, and committed work survives them.
+> - After each commit, append a one-line checkpoint note to the bead: the hash, what it
+>   covers, and the next step. If you are cut off, that note is what the next agent starts
+>   from; nobody will be able to ask you.
 > - `<user's attribution rule, e.g. "Never add Co-Authored-By or any AI attribution.">`
 > - If commit signing fails or hangs, `<user's rule, e.g. "commit unsigned with
 >   git -c commit.gpgsign=false commit and list those commits in your report">`.

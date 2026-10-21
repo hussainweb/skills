@@ -4,7 +4,7 @@ description: Run a multi-agent development session over a batch of beads (`bd`) 
 allowed-tools: Bash, Read, Grep, Glob, Agent, SendMessage, AskUserQuestion
 metadata:
   authors: "Hussain Abbas"
-  version: "1.3.0"
+  version: "1.4.0"
 ---
 
 # Beads orchestration
@@ -36,6 +36,13 @@ conversation is lost the moment it ends.
   wiped a bead's entire hand-off history; the only way back was `bd history <id> --json`.
   Never pass `--notes` to a bead that already has notes, and make sure no prompt you write
   does either. `--append-notes` is the long form of `bd note`.
+- **Quota is shared, and it runs out.** Every agent draws on the user's one usage limit, and
+  what an agent costs is its model times the context it carries times the requests it makes.
+  Give each agent the cheapest model that can do its beads (Phase 2), cap how many run at
+  once (Phase 3), and keep each agent's context short (Phase 4). (Measured: nine agents
+  launched together, each inheriting the orchestrator's top-tier model, used up a five-hour
+  session limit in 25 minutes. Resumed all at once at each reset, with 200-400k tokens of
+  context each, they used it up again in 20-40 minutes, twice.)
 - **Don't do the agents' work.** Your job is planning, relaying and checking. If you start
   implementing, nobody is orchestrating, and your context fills with file dumps.
 - **Never predict an unfinished agent's result.** If the user asks about a running agent,
@@ -114,7 +121,11 @@ Tell the user early, in the same message as the questions:
   visual check"),
 - what will ship unseen or unverified,
 - what you will not do (contact people outside the session, merge to production without
-  their say-so, whatever their policy rules out).
+  their say-so, whatever their policy rules out),
+- the pace: how many agents will run at once (three by default) and which model tier each
+  gets, so they can trade speed for quota before anything starts. If this session itself
+  runs on the strongest tier, say that orchestrating rarely needs it, and that switching the
+  session to a mid-tier model before you begin makes every relay and check cheaper.
 
 ## Phase 2 — Plan the waves
 
@@ -132,13 +143,22 @@ right now ends the session after one wave.
   on the same decision: the agent then reuses what it learned on the first bead instead of
   re-reading it for the next. One agent per bead throws that away. "Fewer agents" on its own
   is not a reason to put beads together.
-- **Cap a group at roughly 3-4 beads, or one epic's slice.** A long chain carries every
-  earlier bead's file reads in its context on every request, cannot be stopped at a bead
-  boundary without the stop request in Phase 4, and loses the most when it dies on a usage
-  limit or an API error. (Measured: a 10-bead agent ran to 184 tool uses and 367k tokens; a
-  6-bead agent hit the usage limit on bead 5, mid-edit, with 32 uncommitted files.) Beyond
-  the cap, split the chain: a second agent starts from the first agent's hand-off notes on
-  the beads and reuses the same worktree.
+- **Every agent gets a budget of about 50 tool uses**, whatever its beads. Context grows
+  with every tool result and is re-sent on every request, so it is the length of an agent's
+  run that costs, not the number of beads in it. An agent that reaches its budget, even
+  mid-bead, commits what passes, writes a checkpoint note on the bead and reports. A fresh
+  agent carries on from that note in the same worktree. Short agents are also the only
+  defence against the usage limit: nothing reports how close it is, so the way to have
+  work closed properly before the limit is for every agent to close often. (Measured:
+  agents grew by 1.5-2.5k tokens a request, from about 50k at the start to 120-230k by
+  request 50 and 300-400k by the end. Eight of nine had a single bead, so capping beads
+  did not help. A 10-bead agent ran to 184 tool uses and 367k tokens; a 6-bead agent hit
+  the usage limit on bead 5, mid-edit, with 32 uncommitted files.)
+- **Size beads to fit the budget.** A bead that spans several subsystems, or whose
+  description lists more than a handful of steps, will not fit in one agent. Split it into
+  child beads with dependencies before launch (see below), so each agent has a bead it can
+  finish and close. Put two or three beads in one agent only when each is small and they
+  share files.
 - Small independent beads in different areas, the "hygiene" batch, are **not** one coherent
   chain just because each is small. Give them two or three agents of related items rather
   than one agent of ten.
@@ -161,8 +181,27 @@ right now ends the session after one wave.
   bd dep add <later-child> <earlier-child>
   ```
 
+**Pick a model tier for each agent**, by the hardest bead in its group. A spawned agent with
+no model set usually inherits the orchestrator's, often the most expensive one available,
+so the choice is never left to the default. Map the tiers onto whatever models the harness
+offers; in Claude Code, for example, they are `haiku`, `sonnet` and `opus`, with any
+top-tier model above them.
+
+| Tier | When | Examples |
+|---|---|---|
+| Small, fast | Mechanical work with nothing to decide | The isolation probe, a version bump, a rename, doc and copy fixes, lint fixes, a config value, re-running gates, bead housekeeping |
+| Mid | The default: the design is settled in the bead and the work is building it | A feature or page to a written spec, an endpoint, tests, a migration, a bug with a known cause |
+| Strong | The bead leaves real judgment to the agent | A cross-cutting refactor, a bug whose cause is unknown (a flaky CI failure, a race), security-sensitive code, an interface contract other lanes build to, a bead a mid-tier agent already failed |
+| Top, if the harness has one above strong | Only when the user asks for it | |
+
+When a bead could go either way, pick the cheaper tier and say in the prompt to stop and
+report if the work turns out harder than the bead describes; relaunching one bead on a
+stronger model costs less than running every bead on one. If the harness cannot set a
+model per agent, say so to the user with the pace, since then every agent costs what the
+session's model costs.
+
 Write the plan as a note on the epic — waves, which agent owns which beads and which areas,
-and why anything is serialised. When the batch has no shared parent, the first bead of the
+the model each agent gets, and why anything is serialised. When the batch has no shared parent, the first bead of the
 batch is the session's home: the plan and the session result go there, and the other beads
 get a one-line note pointing to it. Show the user the plan in a few lines.
 
@@ -203,7 +242,13 @@ areas other agents own, the git and deploy policy, and the report format spelled
   worth saving. Always include memories on the user's standing conventions (signing,
   attribution, push policy). Note the keys you passed on the bead (`bd note <id> "memories
   passed: <keys>"`) so it is clear afterwards what the agent was and wasn't told.
-- Launch all agents of a wave in one message so they run concurrently.
+- **Set the model explicitly on every agent you spawn**, including the probe (small tier)
+  and any agent you resume or relaunch, from the plan's choice.
+- **Run at most three agents at once** unless the user chose a different number. Launch up
+  to the cap together so they run concurrently, and launch the next agent from the plan as
+  each slot frees, highest priority first. Nine at once is not three times faster than
+  three; it reaches the usage limit three times sooner, and then all nine stop mid-edit
+  together.
 
 ## Phase 4 — Orchestrate as reports arrive
 
@@ -226,15 +271,24 @@ When an agent reports (format in `references/agent-report.md`):
    the way. Anything in scope that is now ready gets planned and launched. Don't wait for
    the whole current wave if the next bead only needed one of them.
 
-**Continue a finished agent rather than starting a new one** when its next bead is in the
-same group (Phase 2): same area, same files, one chain. SendMessage resumes it with its
-context intact: the repo layout, the gotchas and its own earlier work. Give it the new bead,
-what has changed on main since, any new boundaries, and any memories that apply to the new
-bead and were not in its first brief. Across groups, start fresh: a new agent in the same
-worktree, briefed from the hand-off notes. Start fresh too when the finished agent's report
-or task notification shows hundreds of tool uses; that is the signal its context is large,
-and the next bead would carry all of it on every request. Resuming needs the agent's
-worktree to still exist, so don't remove one you may continue (Phase 5).
+**Continue a finished agent only while its context is small and warm.** Resuming an agent
+(SendMessage, or the harness's equivalent) keeps its context intact: the repo layout, the
+gotchas, its own earlier work. Every request it makes from then on re-sends all of that
+context. Continue it only when all of these hold:
+
+- its next bead is in the same group (Phase 2): same area, same files, one chain;
+- it has used well under its budget, about 25 tool uses or fewer, so the next bead fits
+  in what is left;
+- it finished recently, within the hour. Prompt caches expire, so resuming an agent that
+  has sat idle longer, or across a usage-limit reset, first re-sends its whole context at
+  full price.
+
+Give it the new bead, what has changed on main since, any new boundaries, and any memories
+that apply to the new bead and were not in its first brief. Otherwise start fresh: a new
+agent in the same worktree, on the tier the new bead needs, briefed from the hand-off
+notes. Those notes are what make a fresh start cheap, so an agent that didn't leave them
+gets asked for them before it is retired. Resuming needs the agent's worktree to still
+exist, so don't remove one you may continue (Phase 5).
 
 **When you need agents to stop** (the user asks, quota is running low, the plan changes),
 send each running agent this stop request via SendMessage rather than killing the task. A
@@ -253,12 +307,16 @@ mid-task. Before resuming anything:
 
 1. Take stock. Look at each checkout's `git status` and its commits since the last merge,
    and at `bd show` for each bead in flight. Record on the epic what survived.
-2. Resume the same agents via SendMessage. Tell them what state they left, that their own
-   sub-agents are gone, and to sort their work into complete and partial rather than
-   assuming it is done.
-3. If quota is short, send the stop request above instead of a resume: verified work gets
-   committed first, and if they can't finish, a bead note says exactly what's done, what's
-   partial and what's next, with nothing uncommitted.
+2. Don't revive a dead agent, not even to ask it for a hand-off. Any message to it, one
+   word included, re-sends its whole context, and after a reset there is no cache to make
+   that cheap. Write the hand-off yourself instead: from the stock-take, its last
+   checkpoint note on the bead, its commits and `git diff --stat` of what is uncommitted,
+   append a note to the bead saying what is committed, what is uncommitted and partial,
+   and the worktree path and branch.
+3. Carry on with fresh agents briefed from those notes, on the tiers the remaining beads
+   need, within the concurrency cap. An agent taking over a dirty worktree first reviews
+   the uncommitted changes against the note, then commits what passes the gates or
+   discards what it can't account for, and says which in its report.
 
 When a new decision comes up mid-session — from the user or surfaced by an agent — record it
 on the bead first, then message the running agent it affects (SendMessage) with the
