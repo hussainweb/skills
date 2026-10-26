@@ -219,7 +219,7 @@ volumes:
 
 ## 10. Cron
 
-Use a Coolify **Scheduled Task** running `drush cron` against the web container, rather than Drupal's automated cron (which fires on a page request and makes a visitor pay for it) or a sidecar loop. Disable automated cron in configuration so the two do not overlap.
+Use a Coolify **Scheduled Task** running `drush cron` against the web container, rather than Drupal's automated cron (which fires on a page request and makes a visitor pay for it) or a sidecar loop. Disable automated cron in configuration so the two do not overlap. Leave the resource's container-name prefix empty, or the task fails with `No valid container was found` (`05-php-applications.md`, Scheduler).
 
 If a sidecar container is used instead, it inherits the web image's `HEALTHCHECK`, does not listen on the port, and will report `unhealthy` forever. `healthcheck: {disable: true}`.
 

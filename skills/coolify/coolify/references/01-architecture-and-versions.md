@@ -18,6 +18,8 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.4.0 | 6 Oct 2026 | **Behaviour change:** registry logins in the UI and API; generated container names and `coolify.*` labels renamed; variable-name validation; proxy no longer re-attached to networks hourly; `coolify-realtime` container gone; `read:sensitive` API ability for logs |
 | 4.4.4–4.4.5 | 7–9 Oct 2026 | **Do not run** — the `coolify` container fails to start (`s6-overlay … Permission denied`, [#12141](https://github.com/coollabsio/coolify/issues/12141)) |
 | 4.4.6 | 9 Oct 2026 | Fixes the 4.4.4 startup failure |
+| 4.4.7, 4.3.24, 4.2.1, 4.1.3, 4.0.1 | 21 Oct 2026 | **Security release on every v4 line** — PHP 8.4.27 for PHP2Shell (CVE-2026-109618/109619), cloudflared, Sentinel 1.1.2. Lines before 4.4 update with `curl -fsSL https://cdn.coollabs.io/coolify/patch.sh \| sudo bash`; upstream recommends 4.4.7 or later, since other security fixes were not backported |
+| 4.5.0 | 23 Oct 2026 | **Breaking:** compose `scale`/`replicas` > 1 rejected; `POST /enable` removed; more API routes need `deploy`. **Behaviour change:** pre-pull skips locally built images; new variables pass exact values |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -58,7 +60,7 @@ docker inspect <container> --format '{{range $k,$v := .Config.Labels}}{{$k}}={{$
 
 ```
 /deploy                     /servers/{uuid}/validate
-/enable                     /applications/{uuid}/{start,restart,stop}
+/enable (removed in 4.5.0)  /applications/{uuid}/{start,restart,stop}
 /disable                    /databases/{uuid}/{start,restart,stop}
                             /services/{uuid}/{start,restart,stop}
                             /services/{uuid}/applications/{app_uuid}/{start,restart,stop}
@@ -128,7 +130,7 @@ Each server has a **Registries** tab (and `GET`/`POST`/`DELETE /servers/{uuid}/r
 
 ### 4.4.0 — generated container names and labels changed
 
-Generated names are `<prefix-or-uuid>-<ISO 8601 timestamp>` (`shop-api-20260908T141530`), and Compose services get `<service>-<prefix-or-uuid>-<timestamp>`; the prefix is `custom_container_name_prefix` in the application's container settings, optional, slugified, unique per server. A **custom container name** now means **consistent naming**, which gives up rolling updates — and the upgrade migration switched consistent naming **on** for every application that had a stored custom name with the setting off, so those applications now stop before they start. If deploys gained downtime at 4.4.0, that is why: clear the custom name and use the prefix instead. Containers are labelled `coolify.applicationUuid` / `coolify.serviceUuid` / `coolify.databaseUuid` instead of the numeric-ID labels; existing containers gain the new labels on their next deploy.
+Generated names are `<prefix-or-uuid>-<ISO 8601 timestamp>` (`shop-api-20260908T141530`), and Compose services get `<service>-<prefix-or-uuid>-<timestamp>`; the prefix is `custom_container_name_prefix` in the application's container settings, optional, slugified, unique per server. A **custom container name** now means **consistent naming**, which gives up rolling updates — and the upgrade migration switched consistent naming **on** for every application that had a stored custom name with the setting off, so those applications now stop before they start. If deploys gained downtime at 4.4.0, that is why: clear the custom name and use the prefix instead — **unless the resource runs Scheduled Tasks and has more than one container** (§3, 4.5.0: a prefix hides the containers from the task runner). Containers are labelled `coolify.applicationUuid` / `coolify.serviceUuid` / `coolify.databaseUuid` instead of the numeric-ID labels; existing containers gain the new labels on their next deploy.
 
 ### 4.4.0 — the proxy is no longer re-attached to networks hourly
 
@@ -153,13 +155,51 @@ Names must match `[A-Za-z_][A-Za-z0-9_.]*`. An existing runtime-only variable wi
 
 Up to 4.4.1 the helper's `--add-host` entries changed on every deploy and invalidated the Docker build cache, so a build-on-server deploy was effectively always cold ([#11781](https://github.com/coollabsio/coolify/pull/11781)). Re-measure before optimising a Dockerfile for a cache that only started working at 4.4.2.
 
+### 4.5.0 — Compose `scale` and `replicas` above 1 are rejected
+
+The parser now fails the deploy for any service with `scale` or `deploy.replicas` greater than 1, for applications and one-click services alike. It never worked: Coolify sets a `container_name` on every service, and Compose will not start a second container with the same name. Declare each instance as its own service (`worker1`, `worker2`), sharing a YAML anchor for the environment.
+
+### 4.5.0 — the pre-pull skips locally built images, and custom build commands
+
+The 4.3.19 pre-pull ran `docker compose pull --ignore-buildable`, which only skips services that carry `build:` themselves. A service that **reuses the tag of a built image** — exactly the "one `build:` per image tag" pattern in `02-docker-compose.md` §3 — was pulled too: an unqualified local tag failed the deploy with `pull access denied`, and a registry-qualified tag silently replaced the fresh build with the older registry copy ([#11773](https://github.com/coollabsio/coolify/issues/11773)). Affects 4.3.19–4.4.7; fixed in 4.5.0, which pulls only services whose image comes from neither a `build:` nor another service's build.
+
+4.5.0 also **skips the pre-pull entirely when the resource has a custom build command** (without a build server), because such a command can build images Compose does not know about. For a resource that has a custom build command *and* pulls registry images, the pre-4.3.19 stale-`latest` problem is back — `02-docker-compose.md` §8B.
+
+### 4.5.0 — new variables reach the container exactly as entered
+
+Variables now reach the container with no added escaping: up to 4.4.x Coolify backslash-escaped quotes and backslashes (and quoted literal and multiline values), so the container could see a value with extra backslashes or quotes ([#12024](https://github.com/coollabsio/coolify/pull/12024)). The upgrade marks **every existing variable** as legacy, and they keep the old escaping so running containers see no change; only variables **created** on 4.5.0+ use exact values. Editing an existing variable does not convert it — the UI shows an **Old escaping** warning on any variable whose value differs, and the fix is to delete and re-add it, then restart. If that value is a database password, change it in the database too.
+
+The **Literal** flag still matters under exact escaping: a non-literal value still allows Compose `$VAR` interpolation. `03-environment-variables.md` §5.
+
+### 4.5.0 — API abilities
+
+- `POST /api/v1/enable` is gone. `/disable` remains.
+- Tokens need the **`deploy`** ability, not only `write`, to execute scheduled tasks, restart the proxy, change Sentinel or log drains, log in to a server registry (`POST /servers/{uuid}/registries`), run Docker cleanup, import a server, and delete applications, databases, services or previews.
+- Backup execution messages are hidden unless the token has `read:sensitive` or `root`.
+- `/deploy` and `/deployments/{uuid}` are unchanged — a CI token with `deploy` and `read` keeps working.
+
+### 4.5.0 — Scheduled Tasks and container name prefixes
+
+Scheduled tasks now run only in **running** containers (a stopped container from a rolling update was a candidate before) and skip a run while the previous run is still going.
+
+Read in source at 4.5.0, not observed on a running instance: the task runner finds a Compose service's container by the name prefix `<service>-<resource-uuid>`, or takes the only container if there is just one. A **`custom_container_name_prefix`** (4.4.0) replaces the UUID in the generated name, so on a resource with more than one container the task matches nothing and fails with `No valid container was found. Is the container name correct?`. Do not set a prefix on a resource that runs scheduled tasks. Present since 4.4.0.
+
+### 4.5.0 — smaller changes that alter an action
+
+- **Coolify backs up its own database before an update**, on by default (`is_backup_before_update_enabled`).
+- **Rollback can pull registry images** of the last ten successful deployments — but only for applications with a Docker image name set, and **not for the Docker Compose build pack**. For Compose, rollback is still repointing the image tag (`07-github-actions-deployment.md` §1).
+- **Gitea App sources** join GitHub and GitLab; GitLab can deploy from one system hook rather than a webhook per project.
+- **Plaintext secrets encrypted at rest** (Git-source and server-setting secrets, among others). A query against Coolify's Postgres that read one of those columns now returns ciphertext.
+- **One-click services connect to the predefined network before their containers start** (not after, where a crash-looping container silently missed the connect). Applications are unchanged.
+- **Traefik 3.7.16** (and 2.11.60).
+
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 
 **The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged.
 
-Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22 and v4.4.6**. Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
+Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22, v4.4.6 and v4.5.0**. Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
 
-**What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance.
+**What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance. Its absence no longer does: from 4.5.0 it is logged only when the compose file has registry-image services and no custom build command (§3, 4.5.0).
 
 Symptom, unchanged and still the thing to recognise: a server where someone ran `sudo docker login ghcr.io` (credentials in root's home) while Coolify connects as `ubuntu` fails with `Error error from registry: unauthorized` on the first private image and `Interrupted` on the others. Because the pull now happens before anything stops, the running containers are untouched, the site stays up on the old images, and nothing looks wrong until you check what is deployed. The version jump arrives through Coolify's own auto-update, so it is easy to miss: check `docker inspect coolify --format '{{.Config.Image}} {{.Created}}'` on the control plane.
 
@@ -167,7 +207,7 @@ Fix: a login written to the SSH user's `~/.docker/config.json` — `docker login
 
 **Why it worked before** is an open question with a leading, unconfirmed explanation and a test that would settle it: §4 of `08-troubleshooting.md`.
 
-**What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23 and unchanged at 4.4.6:
+**What is confirmed is that there are two credential contexts, and they differ.** Verified in source at 4.3.23 and unchanged at 4.4.6 and 4.5.0:
 
 - The deploy's pre-pull runs **inside the helper**, which mounts the SSH user's `~/.docker/config.json` at `/root/.docker/config.json`, so it uses the **SSH user's** login. So does the deploy's `docker compose up` — **by default**. Two resource settings move that `up` onto the host: **Preserve repository during deployment**, and **raw compose deployment** without a custom start command (raw compose *with* a custom start command stays in the helper). The deploy log shows which ran: the helper form is prefixed `docker exec <helper>`, the host form is `sudo … docker compose --env-file /data/coolify/applications/<uuid>/.env --project-directory /data/coolify/applications/<uuid> … up -d`.
 - Every host-side `docker compose up -d` — restart, start-after-stop, service deploy, auto-start after a reboot, and the two deploy cases above — is sudo-wrapped whenever the server is non-root, so it reads **root's** `~/.docker/config.json`.
@@ -223,7 +263,7 @@ For the applications this skill is about, the build pack is almost always **Dock
 
 Verified as of August 2026:
 
-- **Nixpacks is in maintenance mode.** Railway, its maker, states in the project README: "This project is currently in maintenance mode and is not under active development. We recommend using Railpack as a replacement." It still works and remains listed in Coolify's UI and docs without a deprecation banner, but it is not gaining new language/version support.
+- **Nixpacks is in maintenance mode.** Railway, its maker, states in the project README: "This project is currently in maintenance mode and is not under active development. We recommend using Railpack as a replacement." It still works, but it is not gaining new language/version support, and since **4.5.0** Coolify itself marks it deprecated in the UI and recommends Railpack.
 - **Railpack** is Railway's successor (BuildKit-based, `railpack.json`, Mise instead of Nix). Coolify added it as a build pack in **v4.1.0 (18 May 2026)** and its docs still label it **Beta**; Railpack-related fixes continued landing through 4.2.0, so on older instances check the version (Rule 0) before assuming it exists.
 
 When auto-detection fits the app at all — a single container, no workers, no sidecars, defaults acceptable — prefer **Railpack for new applications** and treat an existing Nixpacks app as migration-eligible rather than something to build on (config moves from `nixpacks.toml`/`NIXPACKS_*` to `railpack.json`/`RAILPACK_*`). The moment the app needs a second container, a queue worker, precise image control, or a CI-built image, graduate to Docker Compose and the rest of this skill applies.
