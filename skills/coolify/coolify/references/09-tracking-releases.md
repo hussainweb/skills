@@ -58,7 +58,7 @@ Two long-running questions get re-checked every release.
 
 ### GitHub App across multiple organizations
 
-A single GitHub App installed into several organizations is only partially supported: one Coolify source carries one `installation_id`, so each organization needs its own source, hand-assembled by reusing the same App ID, client ID, secrets and private key. Automatic sync does not work in that configuration.
+A single GitHub App installed into several organizations is only partially supported: one Coolify source carries one `installation_id`, so each organization needs its own source, hand-assembled by reusing the same App ID, client ID, secrets and private key. Up to 4.4.x, push webhooks only reached applications under one of those sources, so automatic deploys did not work for the others; 4.5.0 fixes that (below).
 
 Check, in order — any one of these changing is the news:
 
@@ -69,7 +69,7 @@ git show <tag>:resources/views/livewire/project/new/github-private-repository.bl
 gh issue view 5364 --repo coollabsio/coolify --json state,updatedAt
 ```
 
-Unchanged from 4.1.2 through 4.4.6 (issue 5364 still open; the picker still has no organization field). Two hazards persist for anyone using the workaround:
+The single `installation_id` column, the missing organization field in the picker, and open issue 5364 are unchanged from 4.1.2 through 4.5.0. **What changed at 4.5.0 is webhook routing:** a GitHub App webhook is now matched to the source whose `installation_id` it carries, where before it went to the first source with that App ID — so pushes to repositories under every source but the first never found their applications. Automatic deploys on push should therefore now work for each per-organization source. This is the fix for [#11271](https://github.com/coollabsio/coolify/issues/11271), commit `492b17476`, with an upstream test; it is upstream's own version of [#11272](https://github.com/coollabsio/coolify/pull/11272), which proposed the same lookup — `installation.id` first, `app_id` as fallback — and was closed unmerged in its favour. #11272 was verified on a live instance; the 4.5.0 commit is not yet tested end to end here. Thread closed for webhooks; still open for the picker and the hazards below. Two hazards persist for anyone using the workaround (both re-checked at 4.5.0):
 
 - **Do not press "Refetch" on the Permissions tab.** It overwrites the source's Coolify name with the real app slug — collapsing the distinct names that tell the organizations apart, since the resource picker shows only name and `html_url`.
 - **"Update on GitHub" 404s.** The link is built as `/organizations/{org}/settings/apps/...` when `organization` is set, but in this setup that field is the installation *target*, not the app *owner*.
@@ -100,14 +100,18 @@ Each row is a change that altered behaviour for an existing setup. Detail lives 
 | 4.4.2 | Server-side build cache no longer reset every deploy by the helper's `--add-host` entries |
 | 4.4.4–4.4.5 | **Do not run** — the `coolify` container fails to start (`s6-overlay` permission denied, #12141) |
 | 4.4.6 | Fixes the startup failure |
+| 4.4.7, 4.3.24, 4.2.1, 4.1.3, 4.0.1 | Same security release on every line (PHP2Shell CVE-2026-109618/109619, cloudflared, Sentinel 1.1.2). No behaviour change in the paths this skill diffs; 4.4.6 → 4.4.7 touches five files |
+| 4.5.0 | Compose `scale`/`replicas` > 1 rejected; pre-pull skips services that reuse a built tag (broken since 4.3.19, #11773) and skips entirely under a custom build command; new variables use exact escaping while existing ones stay legacy until deleted and re-added; `POST /enable` removed and more API routes need `deploy`; scheduled tasks only in running containers — and still blind to a container-name prefix; GitHub App webhooks routed by installation; Nixpacks marked deprecated; Rollback lists registry images (not for Compose); Coolify DB backed up before update; Gitea App sources; Traefik 3.7.16 |
 
 ### Answered along the way
 
 - **Traefik does infer a port from a multi-port image.** `getPort` sorts the exposed ports numerically and takes the lowest. It does not error and does not guess. See `08-troubleshooting.md` §2.2.
 - **An unhealthy container does not fail a deploy.** Observed directly: deployment reported as passed while the application was failing. A green deploy means the containers started.
 - **Coolify pulls from two credential contexts** — the helper uses the SSH user's docker config, host-side commands are sudo-wrapped and use root's. The deploy's own `docker compose up` is host-side when the resource preserves its repository or uses raw compose deployment (verified at 4.3.23). See `02-docker-compose.md` §8B.
-- **`SERVICE_PASSWORD_<ID>` is 32 characters, not 16.** `Str::password(symbols: false)` with Laravel's default length, unchanged from 4.0.0 to 4.4.6. The upstream docs say 16.
+- **`SERVICE_PASSWORD_<ID>` is 32 characters, not 16.** `Str::password(symbols: false)` with Laravel's default length, unchanged from 4.0.0 to 4.5.0. The upstream docs say 16.
 - **The compose pre-pull and `up` commands, and the helper's config mount, are byte-identical between 4.3.23 and 4.4.6.** The 4.4.0 registry feature adds a way to write the file; it does not change who reads it.
+- **At 4.5.0 the helper's config mount is still identical**, still omitted silently when the file is missing. The pre-pull command changed only in *which* services it names; it still runs in the helper (or on the main server for build-server deploys), so the credential contexts in `02-docker-compose.md` §8B stand.
+- **The 4.5.0 migration comment on exact escaping says re-saved variables convert. They do not** — nothing in the model or the UI clears `uses_legacy_escaping`; only a new record gets exact escaping, which is why the UI says delete and re-add. Another case for checking the tag over the notes.
 
 ## 7. What is worth recording
 

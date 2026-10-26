@@ -92,6 +92,8 @@ They are manageable through the API too: `/team/envs`, `/projects/{uuid}/envs`, 
 - **Multiline** — preserves line breaks. Required for SSH keys, TLS certificates, and inline config blobs.
 - **Literal** — suppresses interpolation, so `$` and other shell-special characters survive verbatim. Needed for bcrypt hashes, regexes containing `$`, and passwords with `$` in them. A password that mysteriously loses everything after a `$` is a missing literal flag.
 
+**Exact versus legacy escaping (4.5.0).** Variables created on 4.5.0+ reach the container exactly as entered. Variables that existed before the upgrade keep the old escaping, which backslash-escapes quotes and backslashes, so a container can see `it\'s` or `C:\\dir` where you typed `it's` or `C:\dir`. Saving such a variable again does **not** convert it; the variable's page shows an **Old escaping** warning when its value is affected, and the fix is to delete it, add it again, and restart. Update a database password in the database at the same time. Exact escaping does not make the Literal flag redundant: without it, `$NAME` in a value is still interpolated by Compose.
+
 ## 6. Predefined variables
 
 Available to every application without declaring them:
@@ -162,6 +164,7 @@ Runtime environment variables are visible to anyone who can run `docker inspect`
 - [ ] `.env.example` lists exactly the keys the compose file references
 - [ ] Secrets are not marked as build variables unless the build needs them; if it does, build secrets are enabled
 - [ ] Values containing `$` are flagged literal; keys and certificates are flagged multiline
+- [ ] On 4.5.0+, no variable that matters shows the **Old escaping** warning
 - [ ] Shared credentials use `{{project.*}}` / `{{team.*}}` rather than being copied per resource
 - [ ] Application code treats empty as absent
 - [ ] Any config cache is rebuilt after deploy

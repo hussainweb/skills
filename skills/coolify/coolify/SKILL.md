@@ -1,6 +1,6 @@
 ---
 name: coolify
-description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.3.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
+description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.5.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
 allowed-tools: Read, Glob, Grep, Bash, WebFetch
 ---
 
@@ -32,14 +32,15 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.4.x** (4.4.6 on 9 Oct 2026; 4.4.0 on 6 Oct 2026). **Skip 4.4.4 and 4.4.5** — the Coolify container itself fails to start |
+| Stable line at time of writing | **4.5.x** (4.5.0 on 23 Oct 2026). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
 | First stable 4.0.0 | 27 Apr 2026 |
-| State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405` |
+| State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405`. `POST /enable` removed in 4.5.0 |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional (caddy-docker-proxy 2.13 since 4.4.0) |
 | Deploy endpoint | `POST /api/v1/deploy?uuid=<uuid>` |
 | Registry login the helper uses | **The SSH user's** `~/.docker/config.json` — or none, silently, if that file is missing. Long-standing, *not* new in 4.3.19. Since **4.4.0** the server's **Registries** tab (and `POST /servers/{uuid}/registries`) writes that same file for you |
 | Domain ports | Stored separately from the domain since 4.3.15 (`domain_port_overrides`); the URL itself is portless |
 | Sentinel | **Mandatory** on regular servers since 4.3.19; the toggle is read-only in UI and API |
+| Compose `scale` / `deploy.replicas` | **Rejected above 1** since 4.5.0 — declare each instance as its own service |
 
 Full version-sensitivity guidance and recent breaking changes: `references/01-architecture-and-versions.md`. The table row above is also the **analysis anchor** — the last version examined in detail. Anything newer is unexamined; see `references/09-tracking-releases.md`.
 
@@ -114,7 +115,8 @@ Flag these on sight, in any Coolify-targeted compose file:
 - A custom `networks:` block. Coolify creates and manages the network; defining your own causes intermittent HTTPS outages because containers land on two networks and Traefik picks non-deterministically.
 - `ports:` on a service that is meant to be reached through the proxy. It bypasses Traefik, exposes the container on the host interface, and invalidates any assumption that `X-Forwarded-*` headers are trustworthy.
 - Two or more services carrying `build:` while sharing one `image:` tag. buildx bake runs them in parallel and they race on export: `image "…": already exists`.
-- `pull_policy: always` in a registry-pull deployment on 4.3.19+. Coolify already pre-pulls every deploy, and the line makes host-side restarts — and the deploy's own `docker compose up`, when the resource preserves its repository or uses raw compose deployment — try to pull as **root** rather than as the SSH user, failing with `unauthorized` on an image that pre-pulled fine. Required only on ≤ 4.3.18, where there is no pre-pull.
+- `pull_policy: always` in a registry-pull deployment on 4.3.19+. Coolify already pre-pulls every deploy, and the line makes host-side restarts — and the deploy's own `docker compose up`, when the resource preserves its repository or uses raw compose deployment — try to pull as **root** rather than as the SSH user, failing with `unauthorized` on an image that pre-pulled fine. Required only on ≤ 4.3.18, where there is no pre-pull. (On 4.5.0+ a resource with a **custom build command** skips the pre-pull too — `references/02-docker-compose.md` §8B.)
+- `scale:` or `deploy.replicas:` above 1. Coolify fixes a `container_name` on every service, so Compose could never start the extra containers; since 4.5.0 the deploy is rejected outright. Run three workers as three services.
 - Secrets baked into the image, or committed in the compose file rather than referenced as `${VAR}`.
 - A healthcheck that only accepts `200`. See `references/05-php-applications.md` §4 — 302, 401 and 403 are all normal for a correctly configured app in some states.
 

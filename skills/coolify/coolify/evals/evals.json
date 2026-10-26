@@ -89,5 +89,32 @@
       "deploy_curl_uses_post"
     ],
     "files": []
+  },
+  {
+    "id": 8,
+    "prompt": "Our Laravel queue is backing up. Can you change the worker in our Coolify docker-compose.yml to run 4 copies? Right now it's a single `worker` service on the same image as `web`.",
+    "expected_output": "The agent should not use `deploy.replicas: 4` or `scale: 4`. It should explain that Coolify sets a fixed `container_name` on every service so Compose can never start extra containers of one service, and that Coolify 4.5.0+ rejects scale or replicas above 1 at deploy time. It should declare four separate services (e.g. worker1..worker4) sharing a YAML anchor for image, command, environment and `healthcheck: {disable: true}`, with no `build:` on the workers. It should check the Coolify version before relying on version-specific behaviour.",
+    "assertions": [
+      "does_not_use_replicas_or_scale",
+      "explains_fixed_container_name",
+      "mentions_4_5_0_rejection",
+      "declares_separate_services_with_anchor",
+      "workers_disable_healthcheck",
+      "no_build_on_worker_services"
+    ],
+    "files": []
+  },
+  {
+    "id": 9,
+    "prompt": "After upgrading Coolify, our drush cron scheduled task fails every run with 'No valid container was found. Is the container name correct?'. It worked before. The resource is a compose app with web, worker and redis.",
+    "expected_output": "The agent should check the Coolify version and the resource's container-name prefix (`custom_container_name_prefix` on application_settings, set in the container settings). It should explain that the scheduled-task runner looks for a container named `<service>-<resource-uuid>\u2026` (or takes the only container when there is just one), and that a prefix set since 4.4.0 replaces the UUID in generated Compose container names, so with several containers the task matches nothing. Fix: clear the prefix and redeploy. It should say this comes from reading the source rather than a confirmed upstream bug, and verify by comparing `docker ps` names against the task's container field.",
+    "assertions": [
+      "establishes_coolify_version",
+      "checks_container_name_prefix",
+      "explains_uuid_based_matching",
+      "recommends_clearing_prefix_and_redeploying",
+      "verifies_with_docker_ps_names"
+    ],
+    "files": []
   }
 ]

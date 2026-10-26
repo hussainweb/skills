@@ -10,7 +10,7 @@ Two deployment models, the CI that implements each, and the server-side setup th
 | Build time counts as | Deploy time | CI time, before the deploy starts |
 | Build resources | The production server's CPU, RAM, disk | GitHub-hosted runners |
 | Layer cache | The server's local Docker cache | `type=gha`, shared across runs |
-| Rollback | Redeploy an older commit and rebuild | Repoint at an older image tag; no rebuild |
+| Rollback | Redeploy an older commit and rebuild | Repoint at an older image tag; no rebuild. Coolify's own Rollback page (registry images since 4.5.0) does not cover the Docker Compose build pack |
 | Registry auth needed on the server | No | **Yes** — `docker login ghcr.io` |
 | Private dependencies | Credentials must reach the server | Credentials stay in CI |
 | Deploy is deterministic | No — the build can produce a different image than CI tested | Yes — the exact tested image ships |
@@ -39,7 +39,7 @@ curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
   "https://<coolify-host>/api/v1/servers/<server-uuid>/registries/ghcr.io/check"   # re-runs docker login with the saved credentials
 ```
 
-Coolify runs `docker --config "$HOME/.docker" login` over its own SSH session, so the file it writes is exactly the one the helper mounts, and the token is not stored in Coolify. Check the request body against your version's `openapi.yaml` before scripting it. Three things to know:
+Coolify runs `docker --config "$HOME/.docker" login` over its own SSH session, so the file it writes is exactly the one the helper mounts, and the token is not stored in Coolify. Check the request body against your version's `openapi.yaml` before scripting it. On 4.5.0+ the login call needs a token with the **`deploy`** ability as well as `write`; the check needs only `write`. Three things to know:
 
 - On a **non-root server** the login is sudo-wrapped, so `config.json` — and `~/.docker` itself, if it did not exist — is created **as root** inside the SSH user's home. Deploys are unaffected (the helper runs as root), but a later hand `docker login` as the user fails to write the file; the chown below fixes that.
 - The tab's **"used by" column only knows applications with a Docker image name set**. A Compose resource pulling `image:` from GHCR is not listed as needing GHCR, so an empty "needed" list proves nothing for Compose.

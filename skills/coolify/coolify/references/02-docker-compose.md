@@ -76,6 +76,25 @@ services:
     command: php artisan queue:work
 ```
 
+On **4.3.19–4.4.7** this pattern breaks the deploy's pre-pull: `worker` has no `build:`, so Coolify tries to pull `myapp:latest` from a registry — `pull access denied` for a local-only tag, or, for a registry-qualified tag, the older registry copy replacing the build that just finished. 4.5.0 recognises a service reusing a built tag and leaves it alone. Upgrade rather than work around it (`01-architecture-and-versions.md` §3).
+
+### No `scale` or `replicas` above 1
+
+Coolify sets a `container_name` on every service, and Compose cannot run two containers with one name, so `scale: 3` or `deploy.replicas: 3` never produced three containers. Since **4.5.0** the deploy is rejected with `Service "worker" sets deploy.replicas to 3`. Declare each instance as its own service:
+
+```yaml
+x-worker: &worker
+  image: myapp:latest
+  restart: unless-stopped
+  command: php artisan queue:work
+  healthcheck:
+    disable: true
+
+services:
+  worker1: *worker
+  worker2: *worker
+```
+
 ### Keep service names simple
 
 Lowercase, no dots, ideally no hyphens: `web`, `worker`, `redis`, `solr`. Coolify 4.3.0 shipped fixes for compose domains, environment variables and proxy router names on service names containing dots or hyphens — evidence that this is a rough edge. A hyphen is tolerable; a dot is asking for trouble.
@@ -120,7 +139,7 @@ Coolify generates values for variables matching `SERVICE_<TYPE>_<IDENTIFIER>`, w
 | `SERVICE_FQDN_<ID>` | FQDN derived from the generated URL |
 | `SERVICE_URL_<ID>` | Full URL based on the instance wildcard domain |
 | `SERVICE_NAME_<ID>` | Service name identifier — useful when preview deployments vary the name |
-| `SERVICE_PASSWORD_<ID>` | Random 32-character string, no symbols — Laravel's `Str::password` default. The upstream docs' "16" is wrong; verified 32 from 4.0.0 through 4.3.23 |
+| `SERVICE_PASSWORD_<ID>` | Random 32-character string, no symbols — Laravel's `Str::password` default. The upstream docs' "16" is wrong; verified 32 from 4.0.0 through 4.5.0 |
 | `SERVICE_PASSWORD_64_<ID>` | Random 64-character string, no symbols |
 | `SERVICE_PASSWORDWITHSYMBOLS_<ID>` | As above, with symbols (`_64` variant too) |
 | `SERVICE_USER_<ID>` | Random 16-character string |
@@ -243,6 +262,8 @@ Dropping the line means a host-side restart uses the image already on the server
 
 **On ≤ 4.3.18 there is no pre-pull step, so `pull_policy: always` is still required there** — and on those versions a non-root server needs root to hold the registry login too. Check the version before deciding (Rule 0).
 
+**On 4.5.0+, a custom build command switches the pre-pull off** (unless a build server is used), so a resource with both a custom build command and registry images is back to reusing a stale local `latest`. Prefer no custom build command in this shape. If you need one, have it pull the registry services explicitly — it runs in the helper, as the SSH user — rather than reaching for `pull_policy: always`, which reintroduces the root-context failure above. Not yet tested on a running instance.
+
 See `07-github-actions-deployment.md` §2 for the registry side, and `01-architecture-and-versions.md` §3 for the 4.3.19 pull-ordering change.
 
 ### C. Single service, compiled binary — the minimal case
@@ -303,6 +324,7 @@ Relevant only to shape A, but it is where deploy time goes.
 - [ ] No `networks:` block
 - [ ] No `ports:` on any proxied service
 - [ ] At most one `build:` per `image:` tag
+- [ ] No `scale:` or `deploy.replicas:` above 1 (rejected since 4.5.0)
 - [ ] Service names lowercase, no dots
 - [ ] **No** `pull_policy: always` on 4.3.19+ (Coolify pre-pulls; the line breaks host-side restarts) — required only on ≤ 4.3.18
 - [ ] `restart: unless-stopped` on long-lived services

@@ -134,11 +134,12 @@ worker:
 - `healthcheck: disable: true` is required. The worker inherits the web image's `HEALTHCHECK`, does not listen on the port, and would otherwise report `unhealthy` forever while working perfectly.
 - `--max-time` lets the process exit periodically so `restart: unless-stopped` picks up a new image after a deploy; without it a long-lived worker can keep running stale code.
 - The worker needs the **same environment variables** as the web service. Duplicating the block is verbose but explicit; a YAML anchor (`x-app-env: &app-env`) is the tidier option and Compose resolves it before Coolify sees it.
+- More workers means more services (`worker1`, `worker2`), not `deploy.replicas` — 4.5.0 rejects replicas above 1 (`02-docker-compose.md` §3).
 - If cache and queue share a Redis with `allkeys-lru`, queued jobs can be evicted. See `04-shared-infrastructure.md` §5.
 
 ### Scheduler
 
-Prefer Coolify's **Scheduled Tasks** (a cron expression against a named container) over a sidecar running `cmd; sleep 60` in a loop. The trade is explicitness — the schedule then lives in the UI rather than in the repository, so leave a comment in the compose file naming what runs outside it.
+Prefer Coolify's **Scheduled Tasks** (a cron expression against a named container) over a sidecar running `cmd; sleep 60` in a loop. The trade is explicitness — the schedule then lives in the UI rather than in the repository, so leave a comment in the compose file naming what runs outside it. Do not give a resource that runs scheduled tasks a custom container-name prefix: with more than one container, the task can no longer find its target (`01-architecture-and-versions.md` §3, 4.5.0).
 
 ### Sessions
 
