@@ -40,7 +40,7 @@ Laravel's agent guidance package: an MCP server with application, database, log 
 ! ddev artisan boost:install
 ```
 
-- **What it writes:** guideline files such as `CLAUDE.md` and `AGENTS.md` (it replaces only its `<laravel-boost-guidelines>` block in an existing file), skills for the detected packages, `.mcp.json` with a `laravel-boost` server, and `boost.json`.
+- **What it writes:** guideline files such as `AGENTS.md` and `CLAUDE.md` (it replaces only its `<laravel-boost-guidelines>` block in an existing file), skills for the detected packages, `.mcp.json` with a `laravel-boost` server, and `boost.json`.
 - **Git:** Laravel says the generated `.mcp.json`, guideline files and `boost.json` may be gitignored, since `boost:install` and `boost:update` regenerate them. Follow what the project already does. `.ai/rules/`, where project rules live, must be committed.
 - **Keep it current:** add `"@php artisan boost:update --ansi"` to Composer's `post-update-cmd` scripts unless it is already there.
 - **MCP in DDEV:** Boost registers `php artisan boost:mcp`, which runs on the host. In a DDEV project, the host may lack the right PHP. If the server fails to connect, change the entry Boost wrote for the agent, such as the one in `.mcp.json`, to `"command": "ddev", "args": ["artisan", "boost:mcp"]`.
