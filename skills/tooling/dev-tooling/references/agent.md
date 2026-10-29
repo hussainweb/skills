@@ -51,6 +51,7 @@ serena project create --language typescript --language php .
 | typescript, javascript | `typescript` | `typescript_vts` (vtsls) is the alternative. |
 | php, drupal, laravel | `php` | Intelephense. `php_phpactor` is the open-source alternative. |
 | python | `python_ty` | Uses ty, matching the Python layer. |
+| go | `go` | gopls, which must be on `PATH`; see `go.md`. |
 | css with SCSS | `scss` | Ask; useful when the theme is maintained here, noise when the SCSS is vendored. |
 | drupal | `yaml` | Optional; useful for services and routing files. |
 
@@ -63,7 +64,7 @@ serena project create --language typescript --language php .
 Claude Code can run language servers itself through plugins. They give post-edit diagnostics and read-only navigation, but no symbol editing, and they run only in terminal sessions.
 
 - **Tier:** ask. Offer it when the user works mainly in Claude Code and wants diagnostics after every edit.
-- **Official plugins:** `typescript-lsp`, `php-lsp` (Intelephense) and `pyright-lsp`, installed with `claude plugin install <name>@claude-plugins-official`. Each needs its server binary on `PATH`. There is no official ty or Laravel plugin.
+- **Official plugins:** `typescript-lsp`, `php-lsp` (Intelephense), `pyright-lsp` and `gopls-lsp`, installed with `claude plugin install <name>@claude-plugins-official`. Each needs its server binary on `PATH`. There is no official ty or Laravel plugin.
 - **Custom servers** such as `laravel-lsp` or TypeScript 7's `tsc --lsp --stdio` need a small plugin with a `.lsp.json` at its root, loaded from a local marketplace. Each entry takes `command`, `args` and `extensionToLanguage`:
 
 ```json
@@ -170,6 +171,24 @@ claude mcp add sentry-spotlight -- npx -y --prefer-online @spotlightjs/spotlight
 ```
 
 - **Using it:** the app must send events to Spotlight, either by starting it with `spotlight run <dev command>` or by setting `SENTRY_SPOTLIGHT=1` in the development environment. Propose the one that fits the project's dev command.
+
+### gopls
+
+gopls has an MCP mode that gives the agent Go-specific tools, among them workspace symbol search, a file's context, a package's API, symbol references and diagnostics for edited files. It overlaps with Serena's `go` server; it adds diagnostics and Go-aware package summaries, and it costs a second gopls process.
+
+- **Tier:** ask, in a project with the `go` layer. Offer it when the user does not use Serena, or wants diagnostics after every edit.
+- **Entry:** it needs only `gopls` on `PATH`, so it can be shared in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "gopls": { "command": "gopls", "args": ["mcp"] }
+  }
+}
+```
+
+- **Guidance:** propose one line in `AGENTS.md` telling agents to run the diagnostics tool on edited Go files before running the tests, and to check symbol references before renaming or removing an exported symbol. Without it, agents fall back to Grep.
+- **Verify:** `claude mcp list` shows `gopls` connected, after the user approves the project server. An old gopls without the `mcp` subcommand fails here; upgrade it as a machine-scope action.
 
 ### Laravel Boost
 

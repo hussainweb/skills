@@ -214,6 +214,25 @@ if matching(r"(^|/)(pyproject\.toml|requirements[^/]*\.txt|setup\.py|uv\.lock)$"
     out("python.tools_mentioned", ", ".join(tools))
     out("python.requires", (re.search(r'requires-python\s*=\s*"([^"]+)"', py) or [None, None])[1])
 
+# --- Go, per module ------------------------------------------------------------------
+gomods = sorted(matching(r"(^|/)go\.mod$", 10), key=lambda m: (m != "go.mod", m))
+if gomods or (ROOT / "go.work").exists():
+    layers.append("go")
+    out("go.work", "yes" if (ROOT / "go.work").exists() else None)
+    for m in gomods:
+        d = str(Path(m).parent)
+        text = (ROOT / m).read_text(errors="replace")
+        ver = re.search(r"^go\s+(\S+)", text, re.M)
+        tc = re.search(r"^toolchain\s+(\S+)", text, re.M)
+        out(f"go[{d}]", f"go={ver.group(1) if ver else '?'}" + (f" toolchain={tc.group(1)}" if tc else ""))
+        tools = re.findall(r"^tool\s+([^\s(]\S*)", text, re.M)
+        block = re.search(r"^tool\s*\((.*?)^\)", text, re.M | re.S)
+        if block:
+            tools += re.findall(r"^\s*(\S+)", block.group(1), re.M)
+        out(f"go[{d}].tools", ", ".join(tools))
+    out("go.templ_files", len(matching(r"\.templ$")))
+    out("go.tools_go", ", ".join(matching(r"(^|/)tools\.go$", 4)))
+
 out("layers", " ".join(layers))
 
 # --- Environment ------------------------------------------------------------------------
@@ -252,6 +271,7 @@ CONFIGS = {
     "pint": r"(^|/)pint\.json$",
     "ruff": r"(^|/)\.?ruff\.toml$",
     "ty": r"(^|/)ty\.toml$",
+    "golangci": r"(^|/)\.golangci\.(ya?ml|toml|json)$",
     "serena": r"(^|/)\.serena/project\.yml$",
     "mcp": r"(^|/)\.mcp\.json$",
 }
@@ -278,6 +298,9 @@ for f in sorted(matching(r"(^|/)vite\.config\.[cm]?[jt]s$"), key=lambda p: (p.co
     blocks = [b for b in ("lint", "fmt", "test", "run", "staged") if re.search(rf"^\s*{b}\s*:", text, re.M)]
     aware = "yes" if re.search(r"typeAware\s*:\s*true", text) else "no"
     out(f"config.vite-plus[{f}]", f"blocks={' '.join(blocks)} typeAware={aware}")
+for f in matching(r"(^|/)\.golangci\.(ya?ml|toml|json)$", 4):
+    v = re.search(r"""^["']?version["']?\s*[:=]\s*["']?(\d)""", (ROOT / f).read_text(errors="replace"), re.M)
+    out(f"config.golangci.version[{f}]", v.group(1) if v else "1 (no version key)")
 py = (ROOT / "pyproject.toml").read_text() if (ROOT / "pyproject.toml").exists() else ""
 for t in ("ruff", "ty", "mypy", "pyright"):
     if re.search(rf"^\[tool\.{t}", py, re.M):
@@ -290,6 +313,8 @@ ORCH = {
     "lefthook": r"(^|/)lefthook\.ya?ml$",
     "pre-commit": r"(^|/)\.pre-commit-config\.yaml$",
     "gulp": r"(^|/)gulpfile\.[cm]?[jt]s$",
+    "githooks-dir": r"^\.githooks/",
+    "makefile": r"^(GNU)?[Mm]akefile$",
     "github-actions": r"^\.github/workflows/",
     "gitlab-ci": r"^\.gitlab-ci\.yml$",
     "bitbucket": r"^bitbucket-pipelines\.yml$",
@@ -299,15 +324,21 @@ ORCH = {
 }
 for name, rx in ORCH.items():
     out(f"orchestrator.{name}", ", ".join(matching(rx, 4)))
-mise = (ROOT / "mise.toml").read_text(errors="replace") if (ROOT / "mise.toml").exists() else ""
-out("orchestrator.mise-tasks", " ".join(re.findall(r"^\[tasks\.([\w:-]+)\]", mise, re.M))[:300])
+for f in ("mise.toml", ".mise.toml"):
+    if not (ROOT / f).exists():
+        continue
+    mise = (ROOT / f).read_text(errors="replace")
+    out(f"orchestrator.mise-tasks[{f}]", " ".join(re.findall(r"^\[tasks\.([\w:-]+)\]", mise, re.M))[:300])
+    tools = re.search(r"^\[tools\]\s*$(.*?)(?=^\[|\Z)", mise, re.M | re.S)
+    if tools:
+        out(f"environment.mise-tools[{f}]", ", ".join(re.findall(r"""^\s*["']?([^"'=\s#]+)["']?\s*=""", tools.group(1), re.M))[:400])
 if IN_GIT:
     out("orchestrator.git-hooks-path", run("git", "config", "core.hooksPath")[1])
 
 # --- Gitignore rules that change where configs can live --------------------------------
 if IN_GIT:
     candidates = ["phpstan.neon.dist", "phpcs.xml.dist", ".jscpd.json", ".fallowrc.json",
-                  ".oxlintrc.json", "stylelint.config.mjs", ".mcp.json", ".serena/project.yml"]
+                  ".oxlintrc.json", "stylelint.config.mjs", ".mcp.json", ".serena/project.yml", ".golangci.yml"]
     if webroot and webroot != ".":
         candidates += [f"{webroot}/core/x", f"{webroot}/modules/contrib/x", f"{webroot}/sites/default/files/x"]
     ignored = [c.removesuffix("/x") for c in candidates
@@ -316,7 +347,10 @@ if IN_GIT:
 
 # --- Machine ----------------------------------------------------------------------------
 for b in ("node", "npm", "pnpm", "composer", "php", "uv", "serena", "claude", "go",
-          "laravel-lsp", "intelephense", "phpactor", "ddev", "semble"):
+          "laravel-lsp", "intelephense", "phpactor", "ddev", "semble", "gopls", "golangci-lint", "mise"):
     out(f"bin.{b}", "yes" if shutil.which(b) else "no")
 if shutil.which("serena"):
     out("bin.serena.version", run("serena", "--version")[1].removeprefix("Serena ").strip())
+if shutil.which("golangci-lint"):
+    v = re.search(r"version\s+v?(\S+)", run("golangci-lint", "version")[1])
+    out("bin.golangci-lint.version", v.group(1) if v else None)

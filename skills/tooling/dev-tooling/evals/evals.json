@@ -114,5 +114,20 @@
       "does_not_scrape_in_check_mode"
     ],
     "files": []
+  },
+  {
+    "id": 10,
+    "prompt": "Set up the dev tooling for this Go web service. It has a mise.toml and a .golangci.yml from an older project.",
+    "expected_output": "The agent detects the go layer and loads go.md. It reads the .golangci.yml version from the detect script and, finding no version key, marks golangci-lint outdated and offers golangci-lint migrate as an ask instead of rewriting the config. It pins golangci-lint and gopls under [tools] in the existing mise.toml rather than using go get -tool, matches the mise go entry to the go.mod directive, and adds gofmt -l, golangci-lint run, jscpd and go test to a mise check or lint task. It proposes CI steps for gofmt, golangci-lint-action with a pinned v2 version and go test -race, creates .serena/project.yml with the go server, and offers the gopls MCP server as an ask. Verify results are reported as counts without fixing findings.",
+    "assertions": [
+      "loads_go_catalog",
+      "treats_v1_config_migration_as_ask",
+      "pins_machine_tools_in_mise",
+      "does_not_add_golangci_lint_as_go_tool",
+      "uses_mise_task_for_check_command",
+      "configures_serena_with_go",
+      "offers_gopls_mcp_as_ask"
+    ],
+    "files": []
   }
 ]
