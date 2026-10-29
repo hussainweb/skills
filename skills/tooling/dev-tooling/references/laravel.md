@@ -43,8 +43,8 @@ Laravel's agent guidance package: an MCP server with application, database, log 
 - **What it writes:** guideline files such as `CLAUDE.md` and `AGENTS.md` (it replaces only its `<laravel-boost-guidelines>` block in an existing file), skills for the detected packages, `.mcp.json` with a `laravel-boost` server, and `boost.json`.
 - **Git:** Laravel says the generated `.mcp.json`, guideline files and `boost.json` may be gitignored, since `boost:install` and `boost:update` regenerate them. Follow what the project already does. `.ai/rules/`, where project rules live, must be committed.
 - **Keep it current:** add `"@php artisan boost:update --ansi"` to Composer's `post-update-cmd` scripts unless it is already there.
-- **MCP in DDEV:** Boost registers `php artisan boost:mcp`, which runs on the host. In a DDEV project, the host may lack the right PHP. If the server fails to connect, change the `.mcp.json` entry to `"command": "ddev", "args": ["artisan", "boost:mcp"]`.
-- **Verify:** `boost.json` exists, and `claude mcp list` shows `laravel-boost` connected.
+- **MCP in DDEV:** Boost registers `php artisan boost:mcp`, which runs on the host. In a DDEV project, the host may lack the right PHP. If the server fails to connect, change the entry Boost wrote for the agent, such as the one in `.mcp.json`, to `"command": "ddev", "args": ["artisan", "boost:mcp"]`.
+- **Verify:** `boost.json` exists, and the agent's MCP list shows `laravel-boost` connected.
 - **Project conventions:** for an existing application, mention Boost's `infer-conventions` skill, which drafts project rules from the code for the user to approve. Running it is a separate task.
 
 ## Laravel LSP
@@ -56,4 +56,4 @@ The official, framework-aware language server for Laravel and Blade: completion,
 - **Present when:** `laravel-lsp` is on `PATH`.
 - **Install:** `composer global require laravel/lsp`, with Composer's global bin directory on `PATH`. Requires PHP 8.2 or newer.
 - **PHP environment:** the server auto-detects Herd, Valet, Sail, Lando and DDEV, then falls back to local PHP. In a DDEV project it needs no extra setting.
-- **Agent wiring:** Serena has no Laravel server. Wiring it into Claude Code needs a small local plugin; see `agent.md`. Editors with the official Laravel extension (VS Code, Zed, Sublime) start it on their own.
+- **Agent wiring:** Serena has no Laravel server. Wiring it into an agent needs that agent's own language server support, such as a small local plugin in Claude Code; see `agent.md`. Editors with the official Laravel extension (VS Code, Zed, Sublime) start it on their own.

@@ -117,5 +117,17 @@
       "offers_gopls_mcp_as_ask"
     ],
     "files": []
+  },
+  {
+    "id": 10,
+    "prompt": "Check the dev tooling for this TypeScript project and set up Serena. I use Codex, not Claude Code.",
+    "expected_output": "The agent registers Serena through Codex's own MCP configuration at a scope that is not committed, with --context codex rather than claude-code, and does not run any claude command. The fallow entry goes into the config Codex reads for project servers, translated from the mcpServers JSON shape. Agent-native language servers are skipped or offered only if Codex supports them, and Claude Code plugins are not proposed.",
+    "assertions": [
+      "uses_running_agents_mcp_mechanism",
+      "uses_matching_serena_context",
+      "runs_no_claude_commands",
+      "does_not_propose_claude_plugins"
+    ],
+    "files": []
   }
 ]

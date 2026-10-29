@@ -2,7 +2,17 @@
 
 How the coding agent gets language intelligence and tool access. Applies to every project, after the stack layers, because what it configures depends on them.
 
-The direction: Serena is the primary route to language servers, because it works with any MCP client and adds symbol-level editing. Claude Code's native language server plugins are an optional extra.
+The direction: Serena is the primary route to language servers, because it works with any MCP client and adds symbol-level editing. An agent's own language server support, where it has any, is an optional extra.
+
+## Translating the commands
+
+The commands here use Claude Code's `claude mcp` CLI as the worked example. Translate each into the running agent's own mechanism, its MCP command or config file, and keep the scope the entry asks for:
+
+- **local** — this user and this project, not committed.
+- **user** — this user, every project.
+- **project** — committed and shared with the team, such as Claude Code's `.mcp.json`.
+
+"The agent's MCP list" means whatever shows the registered servers and whether they connect, such as `claude mcp list`. When the agent has no equivalent of a scope, say so and use the closest one that does not commit a machine-specific path.
 
 ## Serena
 
@@ -11,7 +21,7 @@ Wraps language servers as an MCP server, giving the agent symbol search, referen
 Serena has three parts, and only the first is per machine:
 
 1. **The program**, installed once per machine with uv. One install serves every project.
-2. **The registration**, which tells Claude Code to start Serena for a project. Done per project.
+2. **The registration**, which tells the agent to start Serena for a project. Done per project.
 3. **The project config**, `.serena/project.yml`, committed with the project.
 
 ### The program (once per machine)
@@ -22,14 +32,14 @@ Serena has three parts, and only the first is per machine:
 
 ### The registration (per project)
 
-- **Present when:** `claude mcp get serena`, run from the project directory, shows a server whose `--project` points at this project.
-- **Register** at local scope, which is private to this user and this project and is not committed:
+- **Present when:** the agent's MCP config for this project has a `serena` server whose `--project` points at this project.
+- **Register** at local scope, since the command and the absolute path are machine-specific. Never put Serena in the project's shared config. In Claude Code:
 
 ```sh
 claude mcp add serena -- serena start-mcp-server --context claude-code --project "$(pwd)"
 ```
 
-  The `claude-code` context turns off Serena tools that duplicate Claude Code's own. Never put Serena in the shared `.mcp.json`: the command and the absolute path are machine-specific.
+- **Context:** `--context` tells Serena which agent it serves, so it turns off the tools that duplicate the agent's own. Use the context named after the running agent, such as `claude-code`, `codex` or `copilot-cli`; `serena context list` shows them all. When none matches, use `ide`.
 - **Alternative:** a single user-scope registration with `--project-from-cwd` instead of `--project "$(pwd)"` serves every project from its working directory. Use it only if the user asks; per-project registration is the default.
 
 ### The project config
@@ -59,13 +69,13 @@ serena project create --language typescript --language php .
 - **Index:** `serena project index` builds the symbol cache. Run it after creating the config in a large codebase; say it can take minutes.
 - **Verify:** `serena project health-check` passes. Report any server that fails to start; a missing runtime such as Node or PHP is the usual cause.
 
-## Claude Code native language servers
+## Agent-native language servers
 
-Claude Code can run language servers itself through plugins. They give post-edit diagnostics and read-only navigation, but no symbol editing, and they run only in terminal sessions.
+Some agents can run language servers themselves. They typically give post-edit diagnostics and read-only navigation, but no symbol editing. Check whether the running agent supports this; if it does not, skip the row.
 
-- **Tier:** ask. Offer it when the user works mainly in Claude Code and wants diagnostics after every edit.
-- **Official plugins:** `typescript-lsp`, `php-lsp` (Intelephense), `pyright-lsp` and `gopls-lsp`, installed with `claude plugin install <name>@claude-plugins-official`. Each needs its server binary on `PATH`. There is no official ty or Laravel plugin.
-- **Custom servers** such as `laravel-lsp` or TypeScript 7's `tsc --lsp --stdio` need a small plugin with a `.lsp.json` at its root, loaded from a local marketplace. Each entry takes `command`, `args` and `extensionToLanguage`:
+- **Tier:** ask. Offer it when the user wants diagnostics after every edit.
+- **Example, Claude Code:** language servers come as plugins, and run only in terminal sessions. The official ones are `typescript-lsp`, `php-lsp` (Intelephense), `pyright-lsp` and `gopls-lsp`, installed with `claude plugin install <name>@claude-plugins-official`. Each needs its server binary on `PATH`. There is no official ty or Laravel plugin.
+- **Custom servers** such as `laravel-lsp` or TypeScript 7's `tsc --lsp --stdio` need whatever the agent uses to declare a server. In Claude Code that is a small plugin with a `.lsp.json` at its root, loaded from a local marketplace. Each entry takes `command`, `args` and `extensionToLanguage`:
 
 ```json
 {
@@ -85,15 +95,15 @@ Searches code by meaning, such as "where is authentication handled?", and return
 
 - **Tier:** ask, when the codebase is large or the user did not write most of it, such as an inherited Drupal or Laravel site. Skip it for a small project the user knows well; Grep and Serena already cover that. It is still before 1.0, so it is not a default.
 - **Scope:** machine. The program, the sub-agent and the per-repository index cache all live outside the project, so nothing is committed. Name it as a machine-scope install before running it.
-- **Present when:** `semble` is on `PATH` (the detect script prints `bin.semble`) and `~/.claude/agents/semble-search.md` exists, or `claude mcp get semble` shows a server.
-- **Install:**
+- **Present when:** `semble` is on `PATH` (the detect script prints `bin.semble`) and the agent has the `semble-search` sub-agent (in Claude Code, `~/.claude/agents/semble-search.md`) or a `semble` MCP server.
+- **Install:** `--agent` names the running agent; `semble install --help` lists the ones it supports. In Claude Code:
 
 ```sh
 uv tool install semble
 semble install --agent claude --type subagent --yes
 ```
 
-  Prefer the `semble-search` sub-agent over the MCP server: it keeps search results out of the main context and adds no tools to every session. Install the MCP server (`--type mcp`, user scope) only if the user asks.
+  Prefer the `semble-search` sub-agent over the MCP server: it keeps search results out of the main context and adds no tools to every session. Install the MCP server (`--type mcp`, user scope) when the user asks, or when the agent has no sub-agents.
 - **Upgrade:** `semble install` pins the installed version into what it writes, so after `uv tool upgrade semble` rerun the install command to update the pin.
 - **Ignored files:** Semble skips whatever `.gitignore` ignores, plus `node_modules` and similar. In a Drupal project that means core and contrib are not indexed, which suits searching custom code. Add a `.sembleignore` (gitignore syntax) only for generated code the project commits.
 - **Verify:** `semble search "<a concept from this project>" .` returns snippets from the project's own code. The first run downloads the model, so it needs network access.
@@ -105,29 +115,29 @@ Some frameworks ship their own guidance packages for agents: guidelines, skills 
 - Drupal: `drupal/ai_best_practices`, in `drupal.md`.
 - Laravel: Laravel Boost, in `laravel.md`.
 
-Both manage a marked region inside `AGENTS.md` or `CLAUDE.md` and leave the rest of the file alone. When the project already has hand-written agent files, read them first and say what the package will add.
+Both manage a marked region inside `AGENTS.md` or an agent-specific file such as `CLAUDE.md` and leave the rest of the file alone. When the project already has hand-written agent files, read them first and say what the package will add.
 
 ## Documentation index
 
 A [Grounded Docs](https://github.com/arabold/docs-mcp-server) server indexes documentation by library version and serves search over MCP, so the agent answers from the docs for the version the project uses instead of from training data. It matters most for frameworks newer than the model's knowledge. The user runs the server themselves; this catalog has no URL for it.
 
 - **Tier:** ask, when no such server is registered and the project uses a framework with a recipe in `docs-index.md`. Give the reason in terms of this project: name the frameworks and versions the server would index, such as "Laravel 12 and Next.js 16 have recipes". Say the user needs a server running; the skill cannot start one. If they decline, do not offer it again in the same session.
-- **Present when:** `claude mcp list` shows a server whose tools include `search_docs` and `scrape_docs`. The name is the user's choice; `grounded-docs` is the suggestion.
-- **Register:** ask for the server's MCP URL, the one ending in `/mcp`. If the user gives an `/sse` URL, ask for the `/mcp` one instead: the SSE transport is deprecated. Register it at user scope, since one server serves every project:
+- **Present when:** the agent's MCP list shows a server whose tools include `search_docs` and `scrape_docs`. The name is the user's choice; `grounded-docs` is the suggestion.
+- **Register:** ask for the server's MCP URL, the one ending in `/mcp`. If the user gives an `/sse` URL, ask for the `/mcp` one instead: the SSE transport is deprecated. Register it at user scope, since one server serves every project. In Claude Code:
 
 ```sh
 claude mcp add --scope user --transport http grounded-docs <url>
 ```
 
-  Use project scope, in `.mcp.json`, only when the user says the team shares the server. With authentication enabled on the server, the client needs a bearer token; follow the server's authentication docs rather than putting a token in `.mcp.json`.
+  Use project scope only when the user says the team shares the server. With authentication enabled on the server, the client needs a bearer token; follow the server's authentication docs rather than putting a token in a committed config.
 - **Read-only endpoint:** if the user runs a second instance in read-only mode, which offers search but no scrape or remove tools, register that one for everyday sessions and use the full one only for indexing.
 - **Before the first index:** vector search needs an embedding model configured on the server before documentation is indexed; documentation indexed without one gets no vectors until it is scraped again. Mention it once. Without embeddings, search matches words only, and a query phrased differently from the docs misses.
 - **Index:** follow `docs-index.md` for the detected frameworks. Each scrape is an ask, because the index is shared by everyone who uses the server.
-- **Verify:** `claude mcp list` shows the server connected, and `list_libraries` answers.
+- **Verify:** the agent's MCP list shows the server connected, and `list_libraries` answers.
 
 ## MCP servers from project tools
 
-Register these in the project's `.mcp.json`, which is shared with the team. Merge into an existing file; never overwrite it. Claude Code ignores `mcpServers` in `.claude/settings.json` without an error, so do not put them there.
+Register these at project scope, in the config the team shares. The entries below are in the `mcpServers` JSON shape of Claude Code's `.mcp.json`; carry the command and arguments over to the agent's own format. Merge into an existing file; never overwrite it. Put them only where the agent reads MCP servers from: Claude Code, for one, ignores `mcpServers` in `.claude/settings.json` without an error.
 
 ### Fallow
 
@@ -143,7 +153,7 @@ Register these in the project's `.mcp.json`, which is shared with the team. Merg
 ```
 
   With pnpm use `"command": "pnpm", "args": ["exec", "fallow-mcp"]`. In a DDEV project, the agent still starts the server on the host, so Node must be available there.
-- **Verify:** `claude mcp list` shows `fallow` connected, after the user approves the project server.
+- **Verify:** the agent's MCP list shows `fallow` connected, after the user approves the project server.
 
 ### Storybook
 
@@ -151,7 +161,7 @@ Lets the agent list components, read their documentation and stories, preview st
 
 - **Tier:** ask, in a package that has `storybook` as a dependency. The detect script lists it.
 - **Install:** `npx storybook add @storybook/addon-mcp`, run in that package.
-- **Register:** the server runs inside Storybook's dev server, by default at `http://localhost:6006/mcp`. Register it at project scope so the team shares it, adjusting the port to the project's Storybook port:
+- **Register:** the server runs inside Storybook's dev server, by default at `http://localhost:6006/mcp`. Register it at project scope so the team shares it, adjusting the port to the project's Storybook port. In Claude Code:
 
 ```sh
 claude mcp add --scope project --transport http storybook http://localhost:6006/mcp
@@ -164,7 +174,7 @@ claude mcp add --scope project --transport http storybook http://localhost:6006/
 Gives the agent the errors, logs and traces of the locally running app, so it can debug without the user pasting logs.
 
 - **Tier:** ask, in a project whose code uses a Sentry SDK (the detect script lists `@sentry/*` packages). Without a Sentry SDK sending events, Spotlight has nothing to show.
-- **Register:** it runs on the host, so register it at local scope:
+- **Register:** it runs on the host, so register it at local scope. In Claude Code:
 
 ```sh
 claude mcp add sentry-spotlight -- npx -y --prefer-online @spotlightjs/spotlight@latest mcp
@@ -177,7 +187,7 @@ claude mcp add sentry-spotlight -- npx -y --prefer-online @spotlightjs/spotlight
 gopls has an MCP mode that gives the agent Go-specific tools, among them workspace symbol search, a file's context, a package's API, symbol references and diagnostics for edited files. It overlaps with Serena's `go` server; it adds diagnostics and Go-aware package summaries, and it costs a second gopls process.
 
 - **Tier:** ask, in a project with the `go` layer. Offer it when the user does not use Serena, or wants diagnostics after every edit.
-- **Entry:** it needs only `gopls` on `PATH`, so it can be shared in `.mcp.json`:
+- **Entry:** it needs only `gopls` on `PATH`, so it can be shared at project scope:
 
 ```json
 {
@@ -188,7 +198,7 @@ gopls has an MCP mode that gives the agent Go-specific tools, among them workspa
 ```
 
 - **Guidance:** propose one line in `AGENTS.md` telling agents to run the diagnostics tool on edited Go files before running the tests, and to check symbol references before renaming or removing an exported symbol. Without it, agents fall back to Grep.
-- **Verify:** `claude mcp list` shows `gopls` connected, after the user approves the project server. An old gopls without the `mcp` subcommand fails here; upgrade it as a machine-scope action.
+- **Verify:** the agent's MCP list shows `gopls` connected, after the user approves the project server. An old gopls without the `mcp` subcommand fails here; upgrade it as a machine-scope action.
 
 ### Laravel Boost
 
