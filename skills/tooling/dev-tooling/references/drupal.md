@@ -87,7 +87,7 @@ composer require --dev drupal/ai_best_practices:@dev
   - `CLAUDE.md` and `GEMINI.md`, only when they do not exist yet.
   - The merged skills under `.agents/skills/` by default.
   - A `drupal-ai` Composer script and the `allow-plugins` entry.
-- **Existing agent files:** if `AGENTS.md` exists without the markers, read it before installing and tell the user the plugin will take it over on first run. An existing `CLAUDE.md` is left alone, so check that it points at `AGENTS.md`; if not, propose adding that line.
+- **Existing agent files:** if `AGENTS.md` exists without the markers, read it before installing and tell the user the plugin will take it over on first run. An existing `CLAUDE.md` or `GEMINI.md` is left alone, so check that it refers to `AGENTS.md`, as the ground rule in `SKILL.md` says.
 - **Git:** commit `AGENTS.md`, `ai_best_practices.yaml` and the generated skills, so environments installed with `--no-dev`, such as CI and production builds, still give agents the guidance.
 - **Update:** `composer update drupal/ai_best_practices` re-syncs the skills and the `AGENTS.md` region; `composer drupal-ai skills-sync` does the same without updating.
 - **Verify:** `ai_best_practices.yaml` exists, `.agents/skills/` holds skills, and `AGENTS.md` has the marked region.

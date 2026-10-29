@@ -115,7 +115,7 @@ Some frameworks ship their own guidance packages for agents: guidelines, skills 
 - Drupal: `drupal/ai_best_practices`, in `drupal.md`.
 - Laravel: Laravel Boost, in `laravel.md`.
 
-Both manage a marked region inside `AGENTS.md` or an agent-specific file such as `CLAUDE.md` and leave the rest of the file alone. When the project already has hand-written agent files, read them first and say what the package will add.
+Both manage a marked region inside `AGENTS.md` and leave the rest of the file alone. They may also write agent-specific files such as `CLAUDE.md`; `AGENTS.md` stays the one place for guidance, and those files only refer to it. When the project already has hand-written agent files, read them first and say what the package will add.
 
 ## Documentation index
 
