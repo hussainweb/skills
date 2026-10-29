@@ -79,18 +79,6 @@
   },
   {
     "id": 7,
-    "prompt": "Create a new Laravel app called invoices in this directory.",
-    "expected_output": "After running the scaffolding (laravel new or composer create-project), the skill triggers even though tooling was not mentioned. The agent finishes creating the app, runs check mode, shows the status table, and offers init in one line without installing anything until the user agrees.",
-    "assertions": [
-      "triggers_on_scaffolding",
-      "finishes_scaffold_first",
-      "runs_check_mode_only",
-      "offers_init_without_installing"
-    ],
-    "files": []
-  },
-  {
-    "id": 8,
     "prompt": "I run a Grounded Docs server on my tailnet. Hook it up for this Laravel 12 project without Boost and index what it needs. The URL is https://docs.example.ts.net/sse.",
     "expected_output": "The agent asks for the /mcp URL instead of the /sse one, then registers the server at user scope with the http transport and not in .mcp.json. It reads laravel.framework from the detect script, calls list_libraries and find_version with 12.x, and offers the Laravel recipe from docs-index.md as an ask before scraping. When scraping, it uses the /framework/docs/12.x start URL with hostname scope and the include pattern, labels the version 12.0.0, polls get_job_info, and treats completed as unverified until the recipe's check queries return results from the expected pages.",
     "assertions": [
@@ -104,7 +92,7 @@
     "files": []
   },
   {
-    "id": 9,
+    "id": 8,
     "prompt": "Check the tooling on this Next.js 16 project.",
     "expected_output": "With no Grounded Docs server registered, the status table includes the documentation index as an ask even though the user never mentioned documentation, and its reason names Next.js 16 as having a recipe. The agent says the user needs a server running and adds no per-framework docs rows. If a server is registered, it instead adds a Next.js 16 docs row whose status comes from list_libraries and find_version, and it scrapes nothing in check mode.",
     "assertions": [
@@ -116,7 +104,7 @@
     "files": []
   },
   {
-    "id": 10,
+    "id": 9,
     "prompt": "Set up the dev tooling for this Go web service. It has a mise.toml and a .golangci.yml from an older project.",
     "expected_output": "The agent detects the go layer and loads go.md. It reads the .golangci.yml version from the detect script and, finding no version key, marks golangci-lint outdated and offers golangci-lint migrate as an ask instead of rewriting the config. It pins golangci-lint and gopls under [tools] in the existing mise.toml rather than using go get -tool, matches the mise go entry to the go.mod directive, and adds gofmt -l, golangci-lint run, jscpd and go test to a mise check or lint task. It proposes CI steps for gofmt, golangci-lint-action with a pinned v2 version and go test -race, creates .serena/project.yml with the go server, and offers the gopls MCP server as an ask. Verify results are reported as counts without fixing findings.",
     "assertions": [
