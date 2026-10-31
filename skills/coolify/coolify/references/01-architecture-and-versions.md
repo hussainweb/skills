@@ -167,7 +167,9 @@ The 4.3.19 pre-pull ran `docker compose pull --ignore-buildable`, which only ski
 
 ### 4.5.0 — new variables reach the container exactly as entered
 
-Variables now reach the container with no added escaping: up to 4.4.x Coolify backslash-escaped quotes and backslashes (and quoted literal and multiline values), so the container could see a value with extra backslashes or quotes ([#12024](https://github.com/coollabsio/coolify/pull/12024)). The upgrade marks **every existing variable** as legacy, and they keep the old escaping so running containers see no change; only variables **created** on 4.5.0+ use exact values. Editing an existing variable does not convert it — the UI shows an **Old escaping** warning on any variable whose value differs, and the fix is to delete and re-add it, then restart. If that value is a database password, change it in the database too.
+Variables now reach the container with no added escaping: up to 4.4.x Coolify backslash-escaped quotes and backslashes (and quoted literal and multiline values), so the container could see a value with extra backslashes or quotes ([#12024](https://github.com/coollabsio/coolify/pull/12024)). The upgrade marks **every existing variable** as legacy, and they keep the old escaping; only variables **created** on 4.5.0+ use exact values. Editing an existing variable does not convert it — the UI shows an **Old escaping** warning on any variable whose value differs, and the fix is to delete and re-add it, then restart. If that value is a database password, change it in the database too.
+
+**For Docker Compose resources the upgrade does change what containers see, despite #12024's promise.** Up to 4.4.7 the parser wrote each variable's *stored, unescaped* value straight into the generated compose file's `environment:`, replacing `${VAR:-default}`, and that inlined value beat the `.env` file. 4.5.0 stopped rewriting the compose file ([#11794](https://github.com/coollabsio/coolify/pull/11794), "preserve environment variable semantics"), so `${VAR}` is now interpolated by Compose from the `.env` file — where a legacy variable is written backslash-escaped and unquoted, which Compose takes verbatim. A value the container used to receive as `^example\.com$` now arrives as `^example\\.com$`; `it's` becomes `it\'s`. Nothing in the deploy log shows it. Values without `\`, `'`, `"`, tab or CR are unaffected, which is why most of a stack keeps working. Verified by reading both tags and by feeding Compose v5.6 the `.env` lines each path writes. Reported as [#12408](https://github.com/coollabsio/coolify/issues/12408).
 
 The **Literal** flag still matters under exact escaping: a non-literal value still allows Compose `$VAR` interpolation. `03-environment-variables.md` §5.
 
@@ -192,6 +194,22 @@ Read in source at 4.5.0, not observed on a running instance: the task runner fin
 - **Plaintext secrets encrypted at rest** (Git-source and server-setting secrets, among others). A query against Coolify's Postgres that read one of those columns now returns ciphertext.
 - **One-click services connect to the predefined network before their containers start** (not after, where a crash-looping container silently missed the connect). Applications are unchanged.
 - **Traefik 3.7.16** (and 2.11.60).
+
+### 4.5.1 — host-side pulls read the SSH user's registry login, partly
+
+Host-side pulls that run through `sudo` now get `DOCKER_CONFIG="$HOME/.docker"`, expanded by the SSH user's shell before `sudo` resets `HOME`, so they use the login the Registries tab writes ([#12216](https://github.com/coollabsio/coolify/pull/12216)). Covered: build-server deploys (the pre-pull and `up --pull always`), image pulls on additional servers, the registry fallback check, one-click service start and deploy, standalone database start, and the proxy. **Not covered at 4.5.3:** an application deploy's `docker compose up -d` when the resource preserves its repository or uses raw compose deployment — it still runs as root without the prefix, so `pull_policy: always` still breaks there. `02-docker-compose.md` §8B.
+
+### 4.5.1–4.5.3 — smaller changes that alter an action
+
+- **Compose builds are skipped when the images already match the build inputs**, so a runtime-only variable change no longer rebuilds. A build secret change does rebuild.
+- **`COOLIFY_FQDN` in the `.env` file is host only** — paths and ports stripped ([#12245](https://github.com/coollabsio/coolify/pull/12245)).
+- **Developer view flags.** A `# coolify: literal` (or `buildtime`, `runtime`) line above a variable in the developer view sets its flags ([#12349](https://github.com/coollabsio/coolify/pull/12349)).
+- **A required runtime-only variable (`${KEY:?}`) failed the Compose build** with `required variable … is missing a value` on 4.5.0–4.5.2, because the build's `.env` did not hold it ([#12363](https://github.com/coollabsio/coolify/issues/12363)). 4.5.3 passes those values to the build's interpolation without making them build arguments.
+- **Dockerfile `HEALTHCHECK`:** 4.5.1 replaced it with Coolify's healthcheck when that was enabled; 4.5.3 keeps it for existing applications.
+- **"Remove from Coolify only" is gone** from service deletion; a normal delete works with the server unreachable, and the API rejects `delete_from_coolify_only` with 422.
+- **The first root account** can only be registered within ten minutes of Coolify starting (self-hosted). Restart Coolify to reopen the window.
+- **Application commands and configuration** are visible only to team admins and owners, and to tokens with `read:sensitive` (4.5.2).
+- 4.5.1's rolling-update proxy retry labels caused 503s on the first rolling update after saving settings; 4.5.2 removed them, so proxy labels are as in 4.5.0.
 
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 

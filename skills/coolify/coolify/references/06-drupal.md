@@ -94,6 +94,8 @@ if (getenv('TRUSTED_HOST_PATTERNS')) {
 TRUSTED_HOST_PATTERNS=^example\.com$,^www\.example\.com$
 ```
 
+**In Coolify, mark this variable Literal**, and on 4.5.0+ make sure it does not carry the **Old escaping** warning. A variable created before 4.5.0 keeps legacy escaping, and since 4.5.0 that escaping reaches the container: the backslashes double, `^example\\.com$` matches no host, and the site answers every request with 400 `The provided host name is not valid for this server` after an upgrade that changed nothing in the repository. Delete the variable, add it again with Literal on, and redeploy. `03-environment-variables.md` §5.
+
 **Test it positively.** An untrusted `Host` must return 400:
 
 ```sh
@@ -234,6 +236,7 @@ If it is deployed as a genuine multisite, note that the health check's `Host` he
 - [ ] `settings.env.php` guards every block on its primary variable
 - [ ] `HASH_SALT` supplied by Coolify, stable, no default
 - [ ] `TRUSTED_HOST_PATTERNS` format documented and tested with an untrusted `Host` returning 400
+- [ ] `TRUSTED_HOST_PATTERNS` flagged Literal in Coolify, with no **Old escaping** warning
 - [ ] `reverse_proxy` on; web server not resolving the client from `X-Forwarded-For`
 - [ ] Redis bootstrap container definition present if Redis is the default cache
 - [ ] `cache_prefix` set when Redis is shared

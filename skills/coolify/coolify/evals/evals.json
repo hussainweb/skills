@@ -116,5 +116,19 @@
       "verifies_with_docker_ps_names"
     ],
     "files": []
+  },
+  {
+    "id": 10,
+    "prompt": "We upgraded Coolify from 4.4.7 to 4.5.3 last night and now our Drupal site returns 400 'The provided host name is not valid for this server' on every page. Nothing changed in the repo. TRUSTED_HOST_PATTERNS comes from an environment variable in the compose file.",
+    "expected_output": "The agent should establish the Coolify version and check the value the container actually sees (`docker exec <c> printenv TRUSTED_HOST_PATTERNS`), expecting doubled backslashes such as `^example\\\\.com$`. It should explain that the variable predates 4.5.0 and is on legacy escaping, and that up to 4.4.7 Coolify inlined the unescaped stored value into the generated compose file while 4.5.0+ lets Compose interpolate `${TRUSTED_HOST_PATTERNS}` from the legacy-escaped .env, so the upgrade alone changed the value. Fix: delete the variable, add it again with the Literal flag on, and redeploy; then check other variables for the Old escaping warning. It should not suggest preg_quote or editing the Drupal code, and should verify with an untrusted Host returning 400 and the real host returning 200.",
+    "files": [],
+    "assertions": [
+      "establishes_coolify_version",
+      "checks_value_inside_container",
+      "explains_legacy_escaping_reaches_compose_on_4_5",
+      "recommends_delete_and_readd_with_literal",
+      "checks_other_variables_for_old_escaping_warning",
+      "verifies_with_trusted_and_untrusted_host"
+    ]
   }
 ]

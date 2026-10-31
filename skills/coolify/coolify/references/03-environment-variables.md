@@ -92,7 +92,13 @@ They are manageable through the API too: `/team/envs`, `/projects/{uuid}/envs`, 
 - **Multiline** — preserves line breaks. Required for SSH keys, TLS certificates, and inline config blobs.
 - **Literal** — suppresses interpolation, so `$` and other shell-special characters survive verbatim. Needed for bcrypt hashes, regexes containing `$`, and passwords with `$` in them. A password that mysteriously loses everything after a `$` is a missing literal flag.
 
+In the developer view, a `# coolify: literal` line above a variable sets the flag (4.5.1+; `buildtime` and `runtime` work the same way).
+
 **Exact versus legacy escaping (4.5.0).** Variables created on 4.5.0+ reach the container exactly as entered. Variables that existed before the upgrade keep the old escaping, which backslash-escapes quotes and backslashes, so a container can see `it\'s` or `C:\\dir` where you typed `it's` or `C:\dir`. Saving such a variable again does **not** convert it; the variable's page shows an **Old escaping** warning when its value is affected, and the fix is to delete it, add it again, and restart. Update a database password in the database at the same time. Exact escaping does not make the Literal flag redundant: without it, `$NAME` in a value is still interpolated by Compose.
+
+**On a Compose resource, upgrading to 4.5.x is itself what breaks a legacy value.** Up to 4.4.7 Coolify replaced `${VAR:-default}` in the generated compose file with the stored value, unescaped, so the legacy escaping in `.env` never reached the container. From 4.5.0 the reference stays and Compose interpolates it from `.env`, so every legacy variable containing `\`, `'` or `"` changes value on the first deploy after the upgrade (`01-architecture-and-versions.md` §3). Regex values are the dangerous case, because the app still starts — Drupal's `TRUSTED_HOST_PATTERNS` turns `^example\.com$` into `^example\\.com$`, which matches no real host, and every request returns 400 (`06-drupal.md` §3). After upgrading an instance past 4.4.x, walk each Compose resource's variables for the **Old escaping** warning before the next deploy, not after.
+
+**Mark regex values Literal.** It keeps `$` anchors out of Compose interpolation under exact escaping, and on a variable still on legacy escaping it writes the value single-quoted, which Compose reads verbatim — a working stopgap where deleting the variable is awkward.
 
 ## 6. Predefined variables
 
@@ -164,7 +170,8 @@ Runtime environment variables are visible to anyone who can run `docker inspect`
 - [ ] `.env.example` lists exactly the keys the compose file references
 - [ ] Secrets are not marked as build variables unless the build needs them; if it does, build secrets are enabled
 - [ ] Values containing `$` are flagged literal; keys and certificates are flagged multiline
-- [ ] On 4.5.0+, no variable that matters shows the **Old escaping** warning
+- [ ] On 4.5.0+, no variable that matters shows the **Old escaping** warning — check before the first deploy after upgrading from 4.4.x
+- [ ] Values that are regular expressions are flagged literal
 - [ ] Shared credentials use `{{project.*}}` / `{{team.*}}` rather than being copied per resource
 - [ ] Application code treats empty as absent
 - [ ] Any config cache is rebuilt after deploy

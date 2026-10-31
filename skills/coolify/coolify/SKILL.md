@@ -32,7 +32,7 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.5.x** (4.5.0 on 23 Oct 2026). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
+| Stable line at time of writing | **4.5.x** (4.5.3 on 28 Oct 2026). Upgrading a Compose resource from 4.4.x changes any pre-existing variable containing `\`, `'` or `"` — check for **Old escaping** warnings first (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
 | First stable 4.0.0 | 27 Apr 2026 |
 | State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405`. `POST /enable` removed in 4.5.0 |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional (caddy-docker-proxy 2.13 since 4.4.0) |

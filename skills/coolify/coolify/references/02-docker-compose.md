@@ -252,9 +252,12 @@ It used to be mandatory in this shape: without it a redeploy that found a local 
 | What runs | Where | Whose `~/.docker/config.json` |
 | --- | --- | --- |
 | Deploy pre-pull, and the deploy's `docker compose up` by default | **Inside the helper** | The **SSH user's**, bind-mounted to `/root/.docker/config.json` in the helper |
-| The deploy's `docker compose up` when **Preserve repository during deployment** is on, or **raw compose deployment** without a custom start command | **On the host** | **root's** — sudo-wrapped whenever the server is non-root. With `pull_policy: always` the deploy itself fails, right after a successful pre-pull (observed on 4.3.23) |
-| Restart, start-after-stop, service deploy, auto-start after reboot | **On the host** | **root's** — the command is sudo-wrapped whenever the server is non-root |
-| Build-server deploys | **On the host**, and Coolify passes `up --pull always` explicitly | **root's**, regardless of what the compose file says |
+| The deploy's `docker compose up` when **Preserve repository during deployment** is on, or **raw compose deployment** without a custom start command | **On the host** | **root's** — sudo-wrapped whenever the server is non-root. With `pull_policy: always` the deploy itself fails, right after a successful pre-pull (observed on 4.3.23; still unprefixed at 4.5.3) |
+| Application restart, start-after-stop, auto-start after reboot | **On the host** | **root's** — the command is sudo-wrapped whenever the server is non-root |
+| One-click service start and deploy | **On the host** | root's up to 4.5.0; the **SSH user's** from 4.5.1 |
+| Build-server deploys | **On the host**, and Coolify passes `up --pull always` explicitly | root's up to 4.5.0, regardless of what the compose file says; the **SSH user's** from 4.5.1 |
+
+4.5.1 ([#12216](https://github.com/coollabsio/coolify/pull/12216)) prefixes the host-side pulls it fixed with `DOCKER_CONFIG="$HOME/.docker"`, expanded before `sudo` resets `HOME`. It did not touch the preserve-repository and raw-compose `up`, so the rule below is unchanged.
 
 So with a login configured only for the SSH user — which is what `07-github-actions-deployment.md` §2 tells you to do, and is right — the deploy pull succeeds inside the helper, and then any host-side `docker compose up -d` that `pull_policy: always` forces into pulling fails with `unauthorized` on an image that pulled fine moments earlier.
 
