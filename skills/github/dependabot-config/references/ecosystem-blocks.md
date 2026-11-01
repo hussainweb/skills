@@ -35,6 +35,8 @@ updates:
           - "drupal/core*"
       dev-dependencies:
         dependency-type: "development"
+        exclude-patterns:
+          - "drupal/*"
 
   - package-ecosystem: "npm"
     directory: "/web/themes/custom/THEME/"

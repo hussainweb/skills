@@ -128,11 +128,20 @@ Ways to select, usable together:
 - `group-by: dependency-name` — for a monorepo where the same package is pinned in
   several directories, collapsing what used to be one near-identical PR per directory.
 
-The docs are explicit about precedence: "If a dependency matches more than one rule, it's
-included in the first group that it matches." So a broad pattern must either come after
-the narrow ones or carve them out explicitly. The Drupal case below does the latter —
-`drupal/*` excludes `drupal/core*` — and that explicit exclusion is the more readable of
-the two, because it does not depend on the reader knowing that order matters.
+The docs say "If a dependency matches more than one rule, it's included in the first group
+that it matches," but the updater does not follow file order. It ranks matching groups by
+specificity, and a `dependency-type` rule outranks a wildcard pattern. In a real run,
+`@vitejs/plugin-react` went to a `dependency-type: development` catch-all instead of the
+`vite` group (`@vitejs/*`) listed above it, and the update job log said so: "Skipping
+@vitejs/plugin-react for group 'vite' - belongs to more specific group 'dev-dependencies'".
+An exact package name did beat the catch-all.
+
+So never rely on order. Every broad group carves out the narrower ones with
+`exclude-patterns`: a `dependency-type` catch-all excludes each family that has members of
+that type, and a wide pattern excludes the narrow patterns inside it, as `drupal/*`
+excludes `drupal/core*` below. When a package lands in the wrong group, read the
+Dependabot run under Actions (event `dynamic`): it logs a "Checking specificity" line and
+a "Skipping ... belongs to more specific group" line for every contested package.
 
 Name groups after the family, not the mechanism: `drupal-core`, `react`, `linters` — not
 `group-1` or `weekly-npm`.
@@ -164,9 +173,12 @@ groups:
       - "drupal/core*"
   dev-dependencies:
     dependency-type: "development"
+    exclude-patterns:
+      - "drupal/*"
 ```
 
-Pair it with `versioning-strategy: increase-if-necessary` — Drupal sites carry
+The catch-all excludes `drupal/*` so dev packages like `drupal/core-dev` stay with core
+rather than being pulled into the batch (see the precedence note above). Pair it with `versioning-strategy: increase-if-necessary` — Drupal sites carry
 constraints that should be widened only when a bump actually requires it.
 
 **GitHub Actions** — official actions move together and are safe to bump as one, majors
@@ -197,8 +209,9 @@ Tailwind, Drizzle, Playwright, linters (`eslint*`, `stylelint*`, `@biomejs/*`),
 - A group whose patterns match one package is just a slower way of writing nothing.
   Fold it into a neighbour.
 - A group that mixes unrelated families produces a PR nobody can review. Split it.
-- A catch-all `dependency-type: development` group is good *last*, after the named
-  families have claimed what they need.
+- A catch-all `dependency-type: development` group is good only with `exclude-patterns`
+  listing every named family that has dev members. Placing it last is not enough: it
+  outranks wildcard patterns whatever the order.
 
 ## Cooldown
 
