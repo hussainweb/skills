@@ -78,23 +78,22 @@ serena project create --language typescript --language php .
 
 ## Agent-native language servers
 
-Some agents can run language servers themselves. They typically give post-edit diagnostics and read-only navigation, but no symbol editing. Check whether the running agent supports this; if it does not, skip the row.
+Some agents can run language servers themselves. They give diagnostics after every edit and read-only navigation, but no symbol editing, and only that agent benefits. Serena stays the default because it works with every MCP-capable agent; agent-native servers are an extra on top.
 
-- **Tier:** ask. Offer it when the user wants diagnostics after every edit.
-- **Example, Claude Code:** language servers come as plugins, and run only in terminal sessions. The official ones are `typescript-lsp`, `php-lsp` (Intelephense), `pyright-lsp` and `gopls-lsp`, installed with `claude plugin install <name>@claude-plugins-official`. Each needs its server binary on `PATH`. There is no official ty or Laravel plugin.
-- **Custom servers** such as `laravel-lsp` or TypeScript 7's `tsc --lsp --stdio` need whatever the agent uses to declare a server. In Claude Code that is a small plugin with a `.lsp.json` at its root, loaded from a local marketplace. Each entry takes `command`, `args` and `extensionToLanguage`:
+- **Tier:** ask, and only when the running agent supports them and they add something Serena does not cover in this project: automatic diagnostics after each edit that the user wants, or a server Serena cannot run, such as a framework-aware one like `laravel-lsp`. When Serena and the project's check command already cover the layers, skip the row.
+- **Where it lives:** agent-native wiring that has to be declared in a plugin or extension is the user's own tooling, not the project's. Do not add a plugin to the project; propose it for the user's plugin collection (for this user, the `hussainweb/skills` repository) and build it only when asked. Servers should run from the project's own dependencies, such as `${CLAUDE_PROJECT_DIR}/vendor/bin/laravel-lsp` or `${CLAUDE_PROJECT_DIR}/node_modules/.bin/tsc` with `--lsp --stdio`, so the plugin carries no binaries and works across projects.
+- **Example, Claude Code:** language servers come only as plugins, declared in a `.lsp.json` at the plugin root (or `lspServers` in `plugin.json`); `lspServers` is not a settings key, and Claude Code rejects it in `.claude/settings.json`. Each entry takes `command`, `extensionToLanguage` and optionally `args`, `env`, `workspaceFolder` and timeouts; unknown keys make the whole file be skipped. `${CLAUDE_PROJECT_DIR}` and `${CLAUDE_PLUGIN_ROOT}` substitute in `command` and `args`. The servers run only in terminal sessions. Official plugins (`typescript-lsp`, `php-lsp`, `pyright-lsp`, `gopls-lsp`) need their binary on `PATH`.
 
 ```json
 {
   "laravel": {
-    "command": "laravel-lsp",
+    "command": "${CLAUDE_PROJECT_DIR}/vendor/bin/laravel-lsp",
     "extensionToLanguage": { ".php": "php", ".blade.php": "blade" }
   }
 }
 ```
 
-  When two enabled servers claim the same extension, the first registered wins and the other is skipped with a warning. So `laravel-lsp` and `php-lsp` cannot both serve `.php`; pick one. Whether a compound extension like `.blade.php` matches is unverified; check `/plugin` for errors after installing.
-- Do not build such a plugin as part of a toolchain pass. Propose it, and build it only when asked.
+  When two enabled servers claim the same extension, the first registered wins and the other is skipped with a warning, so pick one server per extension. Whether a compound extension like `.blade.php` matches is unverified; check the agent's plugin errors after enabling it.
 
 ## Semble
 

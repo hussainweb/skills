@@ -51,9 +51,9 @@ Laravel's agent guidance package: an MCP server with application, database, log 
 
 The official, framework-aware language server for Laravel and Blade: completion, hovers, diagnostics, definitions and links for routes, views, config and translations.
 
-- **Tier:** usually
-- **Scope:** machine. It is a global binary, not a project dependency.
-- **Present when:** `laravel-lsp` is on `PATH`.
-- **Install:** `composer global require laravel/lsp`, with Composer's global bin directory on `PATH`. Requires PHP 8.2 or newer.
+- **Tier:** ask, and only when the agent has its own language server support and the user wants Laravel-aware completions and diagnostics for the agent. Skip it otherwise: Serena cannot run it (its PHP servers are Intelephense, Phpactor and PHPantom, and it takes no custom servers), and Laravel Boost's MCP server already gives the agent routes, config and version-matched docs.
+- **Scope:** project dependency. `laravel/lsp` ships the server as a prebuilt PHAR and requires only PHP, so `composer require --dev laravel/lsp` adds one package and puts it at `vendor/bin/laravel-lsp`. Prefer that over the global install the README shows, so it arrives with `composer install` like every other dependency. Add it only together with the agent wiring that uses it; on its own nothing runs it.
+- **Present when:** `laravel/lsp` is in `require-dev`, or `laravel-lsp` is on `PATH`.
 - **PHP environment:** the server auto-detects Herd, Valet, Sail, Lando and DDEV, then falls back to local PHP. In a DDEV project it needs no extra setting.
-- **Agent wiring:** Serena has no Laravel server. Wiring it into an agent needs that agent's own language server support, such as a small local plugin in Claude Code; see `agent.md`. Editors with the official Laravel extension (VS Code, Zed, Sublime) start it on their own.
+- **Agent wiring:** through the agent's own language server support; see "Agent-native language servers" in `agent.md`. Editors with the official Laravel extension (VS Code, Zed, Sublime) bundle and start their own copy, so they do not need the dependency.
+- **One server per extension:** Laravel LSP is not a general PHP server; it does not find class definitions or method references. When it serves `.php`, general PHP navigation comes from Serena.

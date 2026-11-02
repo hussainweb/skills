@@ -68,7 +68,7 @@
   {
     "id": 6,
     "prompt": "Set up the tooling for this Laravel app on DDEV.",
-    "expected_output": "The agent confirms Pint and Larastan, installs laravel/boost if missing, and asks the user to run the interactive boost:install themselves through DDEV rather than running it in its own shell. It adds boost:update to post-update-cmd, keeps .ai/rules committed, follows the project's existing choice on gitignoring generated Boost files, and lists the Laravel LSP as a machine-scope install.",
+    "expected_output": "The agent confirms Pint and Larastan, installs laravel/boost if missing, and asks the user to run the interactive boost:install themselves through DDEV rather than running it in its own shell. It adds boost:update to post-update-cmd, keeps .ai/rules committed, follows the project's existing choice on gitignoring generated Boost files, and offers the Laravel LSP only as an ask that depends on agent-native language server support, installed as a dev dependency rather than globally.",
     "assertions": [
       "installs_laravel_boost",
       "hands_interactive_installer_to_user",
