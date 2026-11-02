@@ -18,35 +18,42 @@ The commands here use Claude Code's `claude mcp` CLI as the worked example. Tran
 
 Wraps language servers as an MCP server, giving the agent symbol search, references and symbol-level edits.
 
-Serena has three parts, and only the first is per machine:
+Serena has two parts, both committed with the project:
 
-1. **The program**, installed once per machine with uv. One install serves every project.
-2. **The registration**, which tells the agent to start Serena for a project. Done per project.
-3. **The project config**, `.serena/project.yml`, committed with the project.
+1. **The registration**, which tells the agent to start Serena for this project.
+2. **The project config**, `.serena/project.yml`.
 
-### The program (once per machine)
+Nothing is installed per machine. The registration runs Serena through `uvx`, which fetches and caches it on first use, so every machine and every teammate gets the same server from the repository alone; `uv` is the only prerequisite.
 
-- **Present when:** `serena` is on `PATH`. The detect script prints the installed version.
-- **Install:** `uv tool install -p 3.13 serena-agent`.
-- **Outdated when:** the installed major is below the latest `serena-agent` on PyPI. Upgrading with `uv tool upgrade serena-agent` changes it for every project on the machine, so it is a machine-scope action to name before running.
+### The registration
 
-### The registration (per project)
+- **Tier:** always
+- **Scope:** project, committed in the agent's shared MCP config (`.mcp.json` in Claude Code). Not local scope: a local registration has to be repeated on every machine and every clone, and leaves teammates without the tool. Not user scope: that starts Serena in every repository the user opens.
+- **Present when:** the project's shared MCP config has a `serena` server. A `serena` server at local or user scope instead counts as conflicting: move it into the project config and remove the private one (`claude mcp remove serena -s local`).
+- **Register:** merge this entry into `.mcp.json`:
 
-- **Present when:** the agent's MCP config for this project has a `serena` server whose `--project` points at this project.
-- **Register** at local scope, since the command and the absolute path are machine-specific. Never put Serena in the project's shared config. In Claude Code:
-
-```sh
-claude mcp add serena -- serena start-mcp-server --context claude-code --project "$(pwd)"
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": ["-p", "3.13", "--from", "serena-agent", "serena", "start-mcp-server", "--context", "claude-code", "--project-from-cwd"]
+    }
+  }
+}
 ```
 
+  `--project-from-cwd` activates the project the agent starts the server in (it looks for `.serena/project.yml` or `.git`), so the entry holds no machine-specific path. Claude Code starts project servers from the repository root.
 - **Context:** `--context` tells Serena which agent it serves, so it turns off the tools that duplicate the agent's own. Use the context named after the running agent, such as `claude-code`, `codex` or `copilot-cli`; `serena context list` shows them all. When none matches, use `ide`.
-- **Alternative:** a single user-scope registration with `--project-from-cwd` instead of `--project "$(pwd)"` serves every project from its working directory. Use it only if the user asks; per-project registration is the default.
+- **Verify:** pipe an MCP `initialize` request into the entry's command from the project root and confirm it answers, then check the agent's MCP list shows `serena` connected after the user approves the project server.
+- **A global install** (`uv tool install -p 3.13 serena-agent`) is not needed. If the user has one, `uvx` may reuse it; upgrading it (`uv tool upgrade serena-agent`) is a machine-scope action to name before running.
 
 ### The project config
 
 - **Tier:** always
 - **Scope:** config, `.serena/project.yml`.
 - **Present when:** `.serena/project.yml` exists and its `language_servers` list covers every detected layer that has a server. A file that misses a layer counts as partial; Serena only auto-detects the most prominent language.
+- **Running Serena's CLI:** the `serena project …` commands below need the program. Without a global install, run each through uvx, such as `uvx -p 3.13 --from serena-agent serena project create …`.
 - **Create:** pass every server explicitly rather than relying on inference:
 
 ```sh
