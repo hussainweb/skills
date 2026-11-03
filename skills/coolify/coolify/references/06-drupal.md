@@ -94,7 +94,7 @@ if (getenv('TRUSTED_HOST_PATTERNS')) {
 TRUSTED_HOST_PATTERNS=^example\.com$,^www\.example\.com$
 ```
 
-**In Coolify, mark this variable Literal**, and on 4.5.0+ make sure it does not carry the **Old escaping** warning. A variable created before 4.5.0 keeps legacy escaping, and since 4.5.0 that escaping reaches the container: the backslashes double, `^example\\.com$` matches no host, and the site answers every request with 400 `The provided host name is not valid for this server` after an upgrade that changed nothing in the repository. Delete the variable, add it again with Literal on, and redeploy. `03-environment-variables.md` §5.
+**In Coolify, mark this variable Literal**, and on 4.5.0+ make sure it does not carry the **Old escaping** warning. A variable created before 4.5.0 keeps legacy escaping, and on 4.5.0–4.5.3 that escaping reaches a Compose container through `${TRUSTED_HOST_PATTERNS:-…}`: the backslashes double, `^example\\.com$` matches no host, and the site answers every request with 400 `The provided host name is not valid for this server` after an upgrade that changed nothing in the repository. Upgrade to 4.6.0, which restores the pre-4.5 value, or delete the variable, add it again with Literal on, and redeploy. `03-environment-variables.md` §5.
 
 **Test it positively.** An untrusted `Host` must return 400:
 

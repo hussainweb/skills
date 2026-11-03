@@ -120,15 +120,27 @@
   {
     "id": 10,
     "prompt": "We upgraded Coolify from 4.4.7 to 4.5.3 last night and now our Drupal site returns 400 'The provided host name is not valid for this server' on every page. Nothing changed in the repo. TRUSTED_HOST_PATTERNS comes from an environment variable in the compose file.",
-    "expected_output": "The agent should establish the Coolify version and check the value the container actually sees (`docker exec <c> printenv TRUSTED_HOST_PATTERNS`), expecting doubled backslashes such as `^example\\\\.com$`. It should explain that the variable predates 4.5.0 and is on legacy escaping, and that up to 4.4.7 Coolify inlined the unescaped stored value into the generated compose file while 4.5.0+ lets Compose interpolate `${TRUSTED_HOST_PATTERNS}` from the legacy-escaped .env, so the upgrade alone changed the value. Fix: delete the variable, add it again with the Literal flag on, and redeploy; then check other variables for the Old escaping warning. It should not suggest preg_quote or editing the Drupal code, and should verify with an untrusted Host returning 400 and the real host returning 200.",
+    "expected_output": "The agent should establish the Coolify version and check the value the container actually sees (`docker exec <c> printenv TRUSTED_HOST_PATTERNS`), expecting doubled backslashes such as `^example\\\\.com$`. It should explain that the variable predates 4.5.0 and is on legacy escaping, and that up to 4.4.7 Coolify inlined the unescaped stored value into the generated compose file while 4.5.0+ lets Compose interpolate `${TRUSTED_HOST_PATTERNS}` from the legacy-escaped .env, so the upgrade alone changed the value. Fix: upgrade to 4.6.0, which restores the pre-4.5 value for references like `${TRUSTED_HOST_PATTERNS:-}` without converting the variable; or, staying on 4.5.x, delete the variable, add it again with the Literal flag on, and redeploy. Either way, check other variables for the Old escaping warning. It should not suggest preg_quote or editing the Drupal code, and should verify with an untrusted Host returning 400 and the real host returning 200.",
     "files": [],
     "assertions": [
       "establishes_coolify_version",
       "checks_value_inside_container",
       "explains_legacy_escaping_reaches_compose_on_4_5",
-      "recommends_delete_and_readd_with_literal",
+      "recommends_4_6_0_or_delete_and_readd_with_literal",
       "checks_other_variables_for_old_escaping_warning",
       "verifies_with_trusted_and_untrusted_host"
+    ]
+  },
+  {
+    "id": 11,
+    "prompt": "After upgrading Coolify to 4.6.0, deploying our staging app fails straight away with 'The application production also builds the Docker image ghcr.io/acme/web'. Both apps use the Dockerfile build pack from the same repo and push to GHCR. It worked yesterday.",
+    "expected_output": "The agent should establish the Coolify version and explain that since 4.6.0 a deploy is rejected when another application in the team that builds and pushes (not Docker Image or Docker Compose build packs) has the same Docker image name, because both push the same tags (commit SHA, latest) and one can run the other's image. Fix: give staging its own Docker image name in General settings (e.g. ghcr.io/acme/web-staging), update anything that pulls the old name, and redeploy. It should not suggest downgrading or sharing the name with different tags.",
+    "files": [],
+    "assertions": [
+      "establishes_coolify_version",
+      "explains_4_6_0_shared_image_name_rejection",
+      "explains_shared_tags_risk",
+      "recommends_distinct_image_name_per_application"
     ]
   }
 ]

@@ -20,6 +20,7 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.4.6 | 9 Oct 2026 | Fixes the 4.4.4 startup failure |
 | 4.4.7, 4.3.24, 4.2.1, 4.1.3, 4.0.1 | 21 Oct 2026 | **Security release on every v4 line** — PHP 8.4.27 for PHP2Shell (CVE-2026-109618/109619), cloudflared, Sentinel 1.1.2. Lines before 4.4 update with `curl -fsSL https://cdn.coollabs.io/coolify/patch.sh \| sudo bash`; upstream recommends 4.4.7 or later, since other security fixes were not backported |
 | 4.5.0 | 23 Oct 2026 | **Breaking:** compose `scale`/`replicas` > 1 rejected; `POST /enable` removed; more API routes need `deploy`. **Behaviour change:** pre-pull skips locally built images; new variables pass exact values |
+| 4.6.0 | 2 Nov 2026 | **Breaking:** API deletes need the `delete` ability. **Fixes** the 4.5.0 legacy-escaping regression on Compose resources ([#12408](https://github.com/coollabsio/coolify/issues/12408)). Per-project and per-resource access for members and tokens; update channels; deploys rejected when two applications build the same Docker image name |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -169,7 +170,7 @@ The 4.3.19 pre-pull ran `docker compose pull --ignore-buildable`, which only ski
 
 Variables now reach the container with no added escaping: up to 4.4.x Coolify backslash-escaped quotes and backslashes (and quoted literal and multiline values), so the container could see a value with extra backslashes or quotes ([#12024](https://github.com/coollabsio/coolify/pull/12024)). The upgrade marks **every existing variable** as legacy, and they keep the old escaping; only variables **created** on 4.5.0+ use exact values. Editing an existing variable does not convert it — the UI shows an **Old escaping** warning on any variable whose value differs, and the fix is to delete and re-add it, then restart. If that value is a database password, change it in the database too.
 
-**For Docker Compose resources the upgrade does change what containers see, despite #12024's promise.** Up to 4.4.7 the parser wrote each variable's *stored, unescaped* value straight into the generated compose file's `environment:`, replacing `${VAR:-default}`, and that inlined value beat the `.env` file. 4.5.0 stopped rewriting the compose file ([#11794](https://github.com/coollabsio/coolify/pull/11794), "preserve environment variable semantics"), so `${VAR}` is now interpolated by Compose from the `.env` file — where a legacy variable is written backslash-escaped and unquoted, which Compose takes verbatim. A value the container used to receive as `^example\.com$` now arrives as `^example\\.com$`; `it's` becomes `it\'s`. Nothing in the deploy log shows it. Values without `\`, `'`, `"`, tab or CR are unaffected, which is why most of a stack keeps working. Verified by reading both tags and by feeding Compose v5.6 the `.env` lines each path writes. Reported as [#12408](https://github.com/coollabsio/coolify/issues/12408).
+**On 4.5.x, for Docker Compose resources, the upgrade does change what containers see, despite #12024's promise. Fixed in 4.6.0 (below).** Up to 4.4.7 the parser wrote a variable's *stored, unescaped* value straight into the generated compose file's `environment:` when the reference had a default or used another name (`FOO=${FOO:-}`, `BAR=${FOO}`, `BAR=$FOO`), and that inlined value beat the `.env` file. A plain `FOO=${FOO}` was left as a reference and read the escaped `.env` value even then. 4.5.0 stopped rewriting the compose file ([#11794](https://github.com/coollabsio/coolify/pull/11794), "preserve environment variable semantics"), so `${VAR}` is now interpolated by Compose from the `.env` file — where a legacy variable is written backslash-escaped and unquoted, which Compose takes verbatim. A value the container used to receive as `^example\.com$` now arrives as `^example\\.com$`; `it's` becomes `it\'s`. Nothing in the deploy log shows it. Values without `\`, `'`, `"`, tab or CR are unaffected, which is why most of a stack keeps working. Verified by reading both tags and by feeding Compose v5.6 the `.env` lines each path writes. Reported as [#12408](https://github.com/coollabsio/coolify/issues/12408).
 
 The **Literal** flag still matters under exact escaping: a non-literal value still allows Compose `$VAR` interpolation. `03-environment-variables.md` §5.
 
@@ -197,7 +198,7 @@ Read in source at 4.5.0, not observed on a running instance: the task runner fin
 
 ### 4.5.1 — host-side pulls read the SSH user's registry login, partly
 
-Host-side pulls that run through `sudo` now get `DOCKER_CONFIG="$HOME/.docker"`, expanded by the SSH user's shell before `sudo` resets `HOME`, so they use the login the Registries tab writes ([#12216](https://github.com/coollabsio/coolify/pull/12216)). Covered: build-server deploys (the pre-pull and `up --pull always`), image pulls on additional servers, the registry fallback check, one-click service start and deploy, standalone database start, and the proxy. **Not covered at 4.5.3:** an application deploy's `docker compose up -d` when the resource preserves its repository or uses raw compose deployment — it still runs as root without the prefix, so `pull_policy: always` still breaks there. `02-docker-compose.md` §8B.
+Host-side pulls that run through `sudo` now get `DOCKER_CONFIG="$HOME/.docker"`, expanded by the SSH user's shell before `sudo` resets `HOME`, so they use the login the Registries tab writes ([#12216](https://github.com/coollabsio/coolify/pull/12216)). Covered: build-server deploys (the pre-pull and `up --pull always`), image pulls on additional servers, the registry fallback check, one-click service start and deploy, standalone database start, and the proxy. **Not covered at 4.6.0:** an application deploy's `docker compose up -d` when the resource preserves its repository or uses raw compose deployment — it still runs as root without the prefix, so `pull_policy: always` still breaks there. `02-docker-compose.md` §8B.
 
 ### 4.5.1–4.5.3 — smaller changes that alter an action
 
@@ -210,6 +211,37 @@ Host-side pulls that run through `sudo` now get `DOCKER_CONFIG="$HOME/.docker"`,
 - **The first root account** can only be registered within ten minutes of Coolify starting (self-hosted). Restart Coolify to reopen the window.
 - **Application commands and configuration** are visible only to team admins and owners, and to tokens with `read:sensitive` (4.5.2).
 - 4.5.1's rolling-update proxy retry labels caused 503s on the first rolling update after saving settings; 4.5.2 removed them, so proxy labels are as in 4.5.0.
+
+### 4.6.0 — legacy variables on Compose resources get their pre-4.5 values back
+
+4.6.0 does not convert legacy variables; `uses_legacy_escaping` stays set. Instead, at deploy time, a legacy variable uses exact escaping wherever the pre-4.5 parser inlined it: a reference with a default or under another name, or a reference inside such a default, in a Compose application (not raw compose deployment) or a one-click service ([`5cf1abc0f`](https://github.com/coollabsio/coolify/commit/5cf1abc0f)). The container gets the value as typed again, and the **Old escaping** warning goes away for those variables. A legacy Literal or multiline value containing a `'`, which wrote an `.env` line Compose could not parse, also switches to exact escaping.
+
+What still carries legacy escaping is what always did: a plain `FOO=${FOO}` reference, and Dockerfile, Nixpacks and Railpack applications. The warning still shows on those, and delete-and-re-add is still how to get exact values. So:
+
+- **From 4.4.x, upgrade straight to 4.6.0.** Nothing changes for Compose containers.
+- **On 4.5.x with a variable already deleted and re-added**, it is on exact escaping and stays correct.
+- **On 4.5.x with a value edited to cancel the doubling** (backslashes removed by hand), 4.6.0 passes the edited value through as typed, so it breaks again. Restore the intended value.
+
+### 4.6.0 — API and access
+
+- **Every delete through the API or the MCP server needs the `delete` ability** (or `root`). The migration added `delete` to every existing token that had `write`, so existing tokens keep working. A token created on 4.6.0 with `write` alone gets `403` on deletes.
+- **Members and tokens can be limited to selected projects, environments or resources**, at the levels read, read sensitive, deploy, write, delete and root. Existing members and tokens keep team-wide access (the new `access` and `scopes` columns are null). A CI deploy token can now be scoped to the one resource it deploys.
+- **Tokens can be paused, edited and rolled.** A paused token cannot authenticate, which looks the same as a revoked one from CI.
+- Locked variable values are hidden in `GET /resources` and `GET /projects/{uuid}/{environment}` too. Registry check and logout need `deploy`, like login.
+
+### 4.6.0 — smaller changes that alter an action
+
+- **A deploy fails when another application in the team builds the same Docker image name.** Both would push the same tags, so one could run the other's image. Only applications that build and push count (Dockerfile, Nixpacks, Railpack, static); Docker Image and Docker Compose applications are exempt. Staging and production built from one repository each need their own image name.
+- **Build secrets no longer leak into Compose runtime.** Up to 4.5.3 the helper container held build-secret values in its process environment, which Compose prefers over `--env-file`, so `docker compose pull` and `up` gave containers those values instead of the runtime `.env` ones. 4.6.0 unsets them first. Build secrets also get the stored value now, without the `.env` file's quotes.
+- **Port-suffixed `SERVICE_URL_<NAME>_<PORT>` and `SERVICE_FQDN_<NAME>_<PORT>` reach Compose applications**, at runtime and build time and for previews.
+- **The Compose default of a bare reference is stored** for one-click services, so services such as Umami start again.
+- **Images are compressed with zstd.** Pulling Coolify needs Docker Engine 23.0+, and Coolify requires 24.0. Check old servers before upgrading.
+- **The Coolify version comes from the image alone.** The upgrade removes `COOLIFY_VERSION` from `/data/coolify/source/.env`, so a version pinned there no longer holds. Use a custom tag on the update channel instead.
+- **Update channels:** stable (default), preview, nightly or a custom tag, on the update page or with `php artisan app:update-channel`.
+- **The dashboard domain routes only Reverb's `/app/` WebSocket path**, so `/apps` no longer reaches the Reverb HTTP API.
+- **The helper image now lives in [coollabsio/coolify-helper](https://github.com/coollabsio/coolify-helper)**, and the helper, Sentinel and Traefik versions are pinned in `upstream.json` (helper 1.0.19, Sentinel 1.1.3, Traefik 3.7.16 at 4.6.0).
+- **Helper cleanup removes only finished deployments' helpers**; it used to kill the helpers of running backups, imports and file browsers.
+- Docker Desktop on Windows is no longer supported.
 
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 

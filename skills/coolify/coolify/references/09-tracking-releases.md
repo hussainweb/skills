@@ -40,6 +40,7 @@ Whole-release diffs are too large to read. These paths carry almost everything t
 | Git sources | `app/Livewire/Source/`, `bootstrap/helpers/github.php`, `app/Models/GithubApp.php` |
 | Schema and defaults | `database/migrations` — read the added files, the defaults decide the upgrade impact |
 | Remote execution | `bootstrap/helpers/remoteProcess.php` — sudo wrapping, credential context |
+| Pinned component versions | `upstream.json` (helper, Sentinel, Traefik) since 4.6.0; `versions.json` before. The helper image itself is built in [coollabsio/coolify-helper](https://github.com/coollabsio/coolify-helper) |
 
 A new migration's `->default(...)` is usually the fastest way to tell whether a change alters existing resources or only new ones.
 
@@ -54,7 +55,7 @@ Corollary, and the reason Rule 0 exists: a change that shipped alongside a recov
 
 ## 5. Standing threads
 
-Three long-running questions get re-checked every release.
+Two long-running questions get re-checked every release. A third, legacy escaping on Compose resources, closed at 4.6.0 (below).
 
 ### GitHub App across multiple organizations
 
@@ -74,16 +75,9 @@ The single `installation_id` column, the missing organization field in the picke
 - **Do not press "Refetch" on the Permissions tab.** It overwrites the source's Coolify name with the real app slug — collapsing the distinct names that tell the organizations apart, since the resource picker shows only name and `html_url`.
 - **"Update on GitHub" 404s.** The link is built as `/organizations/{org}/settings/apps/...` when `organization` is set, but in this setup that field is the installation *target*, not the app *owner*.
 
-### Legacy escaping on Compose resources (#12408)
+### ~~Legacy escaping on Compose resources (#12408)~~ — closed at 4.6.0
 
-Pre-4.5.0 variables reach Compose containers backslash-escaped since 4.5.0 (`01-architecture-and-versions.md` §3). Check whether it is fixed:
-
-```sh
-gh issue view 12408 --repo coollabsio/coolify --json state,updatedAt
-git diff <anchor>..<tag> -- app/Jobs/ApplicationDeploymentJob.php app/Traits/HasSecretManager.php bootstrap/helpers/docker.php | grep -n -i 'legacy\|escapeEnvVariables'
-```
-
-When it closes, find out what the fix does to existing variables — converted, or still delete-and-re-add — and update `03-environment-variables.md` §5 and `06-drupal.md` §3.
+Pre-4.5.0 variables reached Compose containers backslash-escaped on 4.5.0–4.5.3. [#12408](https://github.com/coollabsio/coolify/issues/12408) closed on 2 Nov 2026 with commit `5cf1abc0f`, shipped in 4.6.0 the same day. Variables are **not** converted: `HasSecretManager::useExactEscaping()` returns exact escaping for a legacy variable that the pre-4.5 parser inlined, as listed by `dockerComposeVariablesWithStoredValueBeforeExactEscaping()` in `bootstrap/helpers/shared.php`. The fix was checked against the 4.4.7 parser, which did leave a plain `FOO=${FOO}` as a reference, so the upstream rule matches what 4.4.7 did. Detail in `01-architecture-and-versions.md` §3. If a regression is suspected later, diff those two functions.
 
 ### Compose routing and domains
 
@@ -113,10 +107,11 @@ Each row is a change that altered behaviour for an existing setup. Detail lives 
 | 4.4.6 | Fixes the startup failure |
 | 4.4.7, 4.3.24, 4.2.1, 4.1.3, 4.0.1 | Same security release on every line (PHP2Shell CVE-2026-109618/109619, cloudflared, Sentinel 1.1.2). No behaviour change in the paths this skill diffs; 4.4.6 → 4.4.7 touches five files |
 | 4.5.0 | Compose `scale`/`replicas` > 1 rejected; pre-pull skips services that reuse a built tag (broken since 4.3.19, #11773) and skips entirely under a custom build command; new variables use exact escaping while existing ones stay legacy until deleted and re-added; `POST /enable` removed and more API routes need `deploy`; scheduled tasks only in running containers — and still blind to a container-name prefix; GitHub App webhooks routed by installation; Nixpacks marked deprecated; Rollback lists registry images (not for Compose); Coolify DB backed up before update; Gitea App sources; Traefik 3.7.16 |
-| 4.5.0 (found later) | Compose `${VAR}` references no longer replaced by the stored value in the generated compose file (#11794), so legacy-escaped values reach Compose resources' containers — backslashes double, quotes gain backslashes. Breaks regex values such as Drupal's `TRUSTED_HOST_PATTERNS`. Reported as [#12408](https://github.com/coollabsio/coolify/issues/12408), 31 Oct 2026 |
+| 4.5.0 (found later) | Compose `${VAR}` references no longer replaced by the stored value in the generated compose file (#11794), so legacy-escaped values reach Compose resources' containers — backslashes double, quotes gain backslashes. Breaks regex values such as Drupal's `TRUSTED_HOST_PATTERNS`. Reported as [#12408](https://github.com/coollabsio/coolify/issues/12408), 31 Oct 2026; fixed in 4.6.0 |
 | 4.5.1 | Host-side pulls for build servers, services, databases and the proxy use the SSH user's registry login (not the preserve-repository/raw-compose `up`); Compose build skipped when images match the build inputs; `COOLIFY_FQDN` in `.env` host only; `# coolify:` flag directives in the developer view; Dockerfile `HEALTHCHECK` replaced by Coolify's; "Remove from Coolify only" removed; first root account registration limited to ten minutes after start |
 | 4.5.2 | 4.5.1's rolling-update retry labels removed (they caused 503s); application commands and configuration visible only to admins and `read:sensitive` |
 | 4.5.3 | Required runtime-only `${VAR:?}` no longer fails the Compose build (#12363); existing applications keep their Dockerfile `HEALTHCHECK` |
+| 4.6.0 | **#12408 fixed**: legacy variables that the pre-4.5 parser inlined get exact escaping at deploy time, so Compose containers see pre-4.5 values again (no conversion); API deletes need `delete` (added to existing `write` tokens); members and tokens can be scoped to projects, environments or resources; deploy rejected when two building applications share a Docker image name; build secrets kept out of Compose runtime; port-suffixed `SERVICE_URL`/`SERVICE_FQDN` passed to Compose applications; zstd images (Docker 23+ to pull, 24+ required); `COOLIFY_VERSION` dropped from `.env`; update channels; helper moved to its own repo, versions in `upstream.json`; remote commands sent over SSH stdin instead of as an argument |
 
 ### Answered along the way
 
@@ -129,6 +124,7 @@ Each row is a change that altered behaviour for an existing setup. Detail lives 
 - **The 4.5.0 migration comment on exact escaping says re-saved variables convert. They do not** — nothing in the model or the UI clears `uses_legacy_escaping`; only a new record gets exact escaping, which is why the UI says delete and re-add. Another case for checking the tag over the notes.
 - **#12024 says existing variables keep the values their containers had. For Compose resources they do not.** A legacy variable's `.env` line is the same from 4.4.7 to 4.5.3. What changed was #11794, in the same release, which stopped the parser inlining the unescaped stored value into the compose file. Found only after a Drupal site went down; neither PR shows the problem on its own. When an escaping or interpolation change ships, check **both** the `.env` writer and what the parser leaves in `environment:`.
 - **At 4.5.3 the helper still mounts the SSH user's docker config, or nothing if it is missing.** The only changes are a seccomp mount and a clearer build-server error.
+- **At 4.6.0 the credential contexts are unchanged.** The helper's docker-config mount is identical to 4.5.3. `serverDockerConfigPrefix()` is byte-identical and used in the same four places, so the preserve-repository and raw-compose `up` still pulls as root. GitHub multi-org is also unchanged: one `installation_id` column, no organization field in the picker, and #5364 still open.
 
 ## 7. What is worth recording
 

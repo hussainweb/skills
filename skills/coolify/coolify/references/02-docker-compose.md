@@ -149,7 +149,7 @@ Coolify generates values for variables matching `SERVICE_<TYPE>_<IDENTIFIER>`, w
 
 Syntax notes:
 
-- **Port suffix:** `SERVICE_URL_APP_3000` targets port 3000.
+- **Port suffix:** `SERVICE_URL_APP_3000` targets port 3000. Docker Compose applications receive the port-suffixed variables only from 4.6.0.
 - **Because the port is appended after an underscore, an identifier that needs a port must use hyphens internally** — `SERVICE_URL_MY-APP_3000`, not `SERVICE_URL_MY_APP_3000`.
 - **Path suffix:** assign a path to append it — `SERVICE_URL_APP=/v1/realtime`.
 - Reusing the same identifier across services yields the same value, which is how you hand a generated password to both a database and its client.
@@ -252,7 +252,7 @@ It used to be mandatory in this shape: without it a redeploy that found a local 
 | What runs | Where | Whose `~/.docker/config.json` |
 | --- | --- | --- |
 | Deploy pre-pull, and the deploy's `docker compose up` by default | **Inside the helper** | The **SSH user's**, bind-mounted to `/root/.docker/config.json` in the helper |
-| The deploy's `docker compose up` when **Preserve repository during deployment** is on, or **raw compose deployment** without a custom start command | **On the host** | **root's** — sudo-wrapped whenever the server is non-root. With `pull_policy: always` the deploy itself fails, right after a successful pre-pull (observed on 4.3.23; still unprefixed at 4.5.3) |
+| The deploy's `docker compose up` when **Preserve repository during deployment** is on, or **raw compose deployment** without a custom start command | **On the host** | **root's** — sudo-wrapped whenever the server is non-root. With `pull_policy: always` the deploy itself fails, right after a successful pre-pull (observed on 4.3.23; still unprefixed at 4.6.0) |
 | Application restart, start-after-stop, auto-start after reboot | **On the host** | **root's** — the command is sudo-wrapped whenever the server is non-root |
 | One-click service start and deploy | **On the host** | root's up to 4.5.0; the **SSH user's** from 4.5.1 |
 | Build-server deploys | **On the host**, and Coolify passes `up --pull always` explicitly | root's up to 4.5.0, regardless of what the compose file says; the **SSH user's** from 4.5.1 |

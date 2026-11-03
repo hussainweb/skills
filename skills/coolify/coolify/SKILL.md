@@ -1,6 +1,6 @@
 ---
 name: coolify
-description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.5.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
+description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.6.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
 allowed-tools: Read, Glob, Grep, Bash, WebFetch
 ---
 
@@ -32,9 +32,9 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.5.x** (4.5.3 on 28 Oct 2026). Upgrading a Compose resource from 4.4.x changes any pre-existing variable containing `\`, `'` or `"` — check for **Old escaping** warnings first (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
+| Stable line at time of writing | **4.6.x** (4.6.0 on 2 Nov 2026). Upgrade from 4.4.x **straight to 4.6.0**: on 4.5.x, a Compose resource's pre-existing variables containing `\`, `'` or `"` change value in the container, and 4.6.0 fixes that (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
 | First stable 4.0.0 | 27 Apr 2026 |
-| State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405`. `POST /enable` removed in 4.5.0 |
+| State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405`. `POST /enable` removed in 4.5.0. Deletes need the **`delete`** ability since 4.6.0 (existing `write` tokens were given it) |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional (caddy-docker-proxy 2.13 since 4.4.0) |
 | Deploy endpoint | `POST /api/v1/deploy?uuid=<uuid>` |
 | Registry login the helper uses | **The SSH user's** `~/.docker/config.json` — or none, silently, if that file is missing. Long-standing, *not* new in 4.3.19. Since **4.4.0** the server's **Registries** tab (and `POST /servers/{uuid}/registries`) writes that same file for you |
