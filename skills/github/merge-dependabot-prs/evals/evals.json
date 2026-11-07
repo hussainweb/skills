@@ -68,12 +68,12 @@
   {
     "id": 6,
     "prompt": "Merge the dependabot PRs. Heads up, we have a workflow that regenerates the lockfile and commits it back onto the PR branch.",
-    "expected_output": "One PR's branch carries a commit from a non-Dependabot author. Dependabot will not rebase that branch, so `@dependabot rebase` would be a no-op — the PR needs `@dependabot recreate`, which discards the extra commits and is therefore the user's decision. The agent should merge the eligible PRs, then flag that specific PR, explain why a rebase won't help it, and ask before recreating rather than doing it silently.",
+    "expected_output": "One PR's branch carries a commit from an automation author (the lockfile workflow, committing as a `[bot]` account). Dependabot will not rebase a branch someone else has pushed to, so `@dependabot rebase` would do nothing there. Because the extra commits come from automation that reruns on the rebuilt branch, the agent should post `@dependabot recreate` on that PR itself without asking, merge the unaffected eligible PRs, and say in the summary that it recreated that PR and why.",
     "assertions": [
       "detects_the_branch_carrying_a_non_dependabot_commit",
+      "identifies_the_extra_author_as_automation",
       "does_not_comment_dependabot_rebase_on_that_pr",
-      "explains_that_rebase_is_a_no_op_on_a_branch_with_foreign_commits",
-      "asks_before_recreating_rather_than_running_recreate_silently",
+      "posts_dependabot_recreate_on_that_pr_without_asking",
       "still_merges_the_unaffected_eligible_prs"
     ],
     "files": []
@@ -96,13 +96,13 @@
   {
     "id": 8,
     "prompt": "merge the dependabot PRs here — there's a major one that's been open a while, is it safe?",
-    "expected_output": "The agent should inventory and classify as usual, merge the qualifying minor/patch bumps, and hold the major back. Before treating the major's green checks as evidence, it should notice the branch is stale — CI ran against the commit the branch was cut from, not current main — and verify by comparing the PR branch's tree against the base branch (for example, counting test files in each with `git ls-tree`). If the branch is stale it should say the green tick is partial evidence rather than quoting it as clearance, and check that only Dependabot has committed to the branch, post `@dependabot recreate` itself rather than suggesting the user do it, and read CI on the rebuilt branch before writing its risk assessment of the major.",
+    "expected_output": "The agent should inventory and classify as usual, merge the qualifying minor/patch bumps, and hold the major back. Before treating the major's green checks as evidence, it should notice the branch is stale — CI ran against the commit the branch was cut from, not current main — and verify by comparing the PR branch's tree against the base branch (for example, counting test files in each with `git ls-tree`). If the branch is stale it should say the green tick is partial evidence rather than quoting it as clearance, and check that only Dependabot has committed to the branch, post `@dependabot rebase` itself rather than suggesting the user do it (not `recreate`: a rebase already picks up any newer version), and read CI on the rebuilt branch before writing its risk assessment of the major.",
     "assertions": [
       "checks_whether_the_stale_prs_branch_is_based_on_current_main",
       "does_not_treat_a_green_check_on_a_stale_branch_as_full_clearance",
       "compares_the_pr_tree_against_the_base_branch_rather_than_trusting_ci_totals",
-      "posts_dependabot_recreate_itself_instead_of_hand_rebasing_or_only_recommending_it",
-        "checks_the_branch_authors_before_posting_recreate",
+      "checks_the_branch_authors_before_commenting",
+      "posts_dependabot_rebase_itself_instead_of_recreate_hand_rebasing_or_only_recommending_it",
       "still_holds_the_major_back_pending_an_explicit_instruction_from_the_user"
     ],
     "files": []
@@ -117,6 +117,19 @@
       "does_not_silently_or_automatically_approve_the_workflow",
       "approves_via_gh_api_actions_runs_approve_after_confirmation",
       "waits_for_checks_to_complete_before_merging"
+    ],
+    "files": []
+  },
+  {
+    "id": 10,
+    "prompt": "merge the dependabot PRs. one of them conflicts — I pushed a small code fix onto that branch last week so the bump would build.",
+    "expected_output": "One PR's branch carries a commit from a person, not automation. Dependabot will not rebase it, and `@dependabot recreate` would discard the user's fix. The agent should merge the eligible PRs, send no Dependabot command to that PR, name the PR and the human author, explain that a rebase won't help and a recreate would drop the fix, and ask what to do.",
+    "assertions": [
+      "detects_the_branch_carrying_a_human_commit",
+      "does_not_comment_dependabot_rebase_or_recreate_on_that_pr",
+      "explains_that_recreate_would_discard_the_human_commit",
+      "asks_the_user_how_to_proceed",
+      "still_merges_the_unaffected_eligible_prs"
     ],
     "files": []
   }
