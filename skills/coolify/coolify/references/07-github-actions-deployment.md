@@ -10,7 +10,7 @@ Two deployment models, the CI that implements each, and the server-side setup th
 | Build time counts as | Deploy time | CI time, before the deploy starts |
 | Build resources | The production server's CPU, RAM, disk | GitHub-hosted runners |
 | Layer cache | The server's local Docker cache | `type=gha`, shared across runs |
-| Rollback | Redeploy an older commit and rebuild | Repoint at an older image tag; no rebuild. Coolify's own Rollback page (registry images since 4.5.0) does not cover the Docker Compose build pack |
+| Rollback | Redeploy an older commit and rebuild. Since 4.7.0 Coolify's Rollback page lists a Compose application's commit images still on the server (`<uuid>_<service>:<commit>`) | Repoint at an older image tag; no rebuild. Coolify's Rollback page does not list a Compose file's own `image:` tags |
 | Registry auth needed on the server | No | **Yes** — `docker login ghcr.io` |
 | Private dependencies | Credentials must reach the server | Credentials stay in CI |
 | Deploy is deterministic | No — the build can produce a different image than CI tested | Yes — the exact tested image ships |
@@ -379,6 +379,8 @@ Before emitting this job for a real repository, establish the target:
 - The token is generated under **Keys & Tokens → API Tokens**, and needs the `deploy` permission.
 - Store both as **environment secrets** on the environment the deploy job names (see "Which GitHub environment?" above) rather than plain repository secrets.
 - Coolify's own git-source webhook (auto-deploy on push) is an alternative for model A. **Turn it off when using this workflow**, or every push deploys twice — once from Coolify's webhook against un-built code, once from CI.
+- **Superseded deployments (4.7.0+).** A push through Coolify's own git webhook cancels that application's older *queued* webhook deployments by default (`is_auto_cancel_queued_deployments_enabled`, under Advanced → Deployment). API deployments — this workflow — are never cancelled that way. To get the same from CI, append `cancel_previous=queued` (or `building`, which also stops an older one still building) to the deploy URL; the default is `none`. A deployment already replacing containers always finishes. It does not replace the workflow's `concurrency` block, which protects the image tag, not the deploy.
+- **A failing token is throttled (4.7.0+).** Thirty failed API requests a minute from one token or IP get `429` after that (`API_FAILED_REQUEST_RATE_LIMIT`). A polling loop with a revoked or paused token hits it fast, and the `429` then hides the real `401`/`403`.
 
 ### What the deploy actually does
 
@@ -431,5 +433,7 @@ Verify the response shape against your version's `/api/v1/deployments/{uuid}` be
 | Deploy step sees empty `COOLIFY_WEBHOOK_URL` though "the secret is set" | Where the secret lives vs the job's `environment:` | Secret stored on an environment the job does not name (wrong name, or no `environment:` line at all), or the named environment was silently auto-created empty — see §7 |
 | Two deploys per push | Coolify's git-source auto-deploy | Both Coolify's webhook and CI are triggering |
 | Older push overwrites newer | `concurrency` block | Missing or missing `cancel-in-progress` |
+| Deploy shows **Cancelled** though nobody cancelled it (4.7.0+) | Was it a webhook deploy, and did a newer push arrive? | Coolify cancels older queued webhook deployments when a newer push arrives — by design; only the latest commit builds. Turn off under Advanced → Deployment if every commit must deploy. `cancel_previous` on the API does the same to API deploys |
+| Deploy or poll gets `429` | The token's state (paused, revoked, missing ability) | 4.7.0+ throttles a token or IP after 30 failed requests a minute; fix the underlying `401`/`403` |
 | Build works locally, fails in CI | `cache-from`/`cache-to` and the base-image digest | Local cache hides a broken layer |
 | `image "…": already exists` | Count services with `build:` | Two services building into one tag; see `02-docker-compose.md` §3 |

@@ -81,7 +81,10 @@ Values can be defined once and referenced from many resources at three levels:
 {{team.VAR_NAME}}
 {{project.VAR_NAME}}
 {{environment.VAR_NAME}}
+{{server.VAR_NAME}}
 ```
+
+Server-level shared variables resolve in Docker Compose resources only from **4.7.0**; on earlier versions do not rely on `{{server.*}}` in a Compose resource.
 
 Use them in a resource's variable value, e.g. set the resource's `DB_PASSWORD` to `{{project.SHARED_DB_PASSWORD}}`. This is the right way to hand a shared database credential to several applications without copying the secret into each one — see `04-shared-infrastructure.md`.
 
@@ -89,7 +92,8 @@ They are manageable through the API too: `/team/envs`, `/projects/{uuid}/envs`, 
 
 ## 5. Value options
 
-- **Multiline** — preserves line breaks. Required for SSH keys, TLS certificates, and inline config blobs.
+- **Multiline** — preserves line breaks. Required for SSH keys, TLS certificates, and inline config blobs. Up to 4.6.0 Coolify trimmed the trailing newline, and OpenSSH rejects a private key without one (`error in libcrypto`). From 4.7.0 a value with more than one line is stored exactly as entered; a key saved earlier needs saving again to get its newline back. Single-line values are still trimmed.
+- **Locked** (`is_shown_once`) — hides the value in the UI and API. **Permanent since 4.7.0**: no UI, API or MCP path unlocks it, though a new value can replace it unseen. Lock only what nobody needs to read back.
 - **Literal** — suppresses interpolation, so `$` and other shell-special characters survive verbatim. Needed for bcrypt hashes, regexes containing `$`, and passwords with `$` in them. A password that mysteriously loses everything after a `$` is a missing literal flag.
 
 In the developer view, a `# coolify: literal` line above a variable sets the flag (4.5.1+; `buildtime` and `runtime` work the same way).
@@ -98,7 +102,7 @@ In the developer view, a `# coolify: literal` line above a variable sets the fla
 
 **On a Compose resource, 4.5.x is itself what breaks a legacy value. 4.6.0 repairs it.** Up to 4.4.7 Coolify replaced a reference with a default or under another name (`FOO=${FOO:-}`, `BAR=${FOO}`) in the generated compose file with the stored value, unescaped, so the legacy escaping in `.env` never reached the container. 4.5.0–4.5.3 leave the reference for Compose to interpolate from `.env`, so such a legacy variable containing `\`, `'` or `"` changes value on the first deploy after the upgrade. Regex values are the dangerous case, because the app still starts — Drupal's `TRUSTED_HOST_PATTERNS` turns `^example\.com$` into `^example\\.com$`, which matches no real host, and every request returns 400 (`06-drupal.md` §3). 4.6.0 gives exactly those references exact escaping at deploy time, without converting the variable, so their containers get the pre-4.5 value again ([#12408](https://github.com/coollabsio/coolify/issues/12408), `01-architecture-and-versions.md` §3).
 
-- **From 4.4.x, upgrade straight to 4.6.0**, not to 4.5.x.
+- **From 4.4.x, upgrade straight to 4.6.0 or later** (4.7.1 at the time of writing), not to 4.5.x.
 - **Stuck on 4.5.x:** delete and re-add the affected variables, or mark them Literal (below).
 - **A value hand-edited on 4.5.x to cancel the doubling** breaks again on 4.6.0. Restore the intended value.
 - **The Old escaping warning on 4.6.0** means the container really does get the escaped value, as it did before 4.5 (a plain `FOO=${FOO}` reference, or a non-Compose application). Delete and re-add the variable if the exact value is wanted.

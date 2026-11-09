@@ -190,7 +190,7 @@ Read in source at 4.5.0, not observed on a running instance: the task runner fin
 ### 4.5.0 — smaller changes that alter an action
 
 - **Coolify backs up its own database before an update**, on by default (`is_backup_before_update_enabled`).
-- **Rollback can pull registry images** of the last ten successful deployments — but only for applications with a Docker image name set, and **not for the Docker Compose build pack**. For Compose, rollback is still repointing the image tag (`07-github-actions-deployment.md` §1).
+- **Rollback can pull registry images** of the last ten successful deployments — but only for applications with a Docker image name set, and **not for the Docker Compose build pack**. For Compose, rollback is still repointing the image tag (`07-github-actions-deployment.md` §1). 4.5.0 also emptied a Compose application's Rollback list; 4.7.0 restores it, listing the commit images Coolify built on the server.
 - **Gitea App sources** join GitHub and GitLab; GitLab can deploy from one system hook rather than a webhook per project.
 - **Plaintext secrets encrypted at rest** (Git-source and server-setting secrets, among others). A query against Coolify's Postgres that read one of those columns now returns ciphertext.
 - **One-click services connect to the predefined network before their containers start** (not after, where a crash-looping container silently missed the connect). Applications are unchanged.
@@ -198,7 +198,7 @@ Read in source at 4.5.0, not observed on a running instance: the task runner fin
 
 ### 4.5.1 — host-side pulls read the SSH user's registry login, partly
 
-Host-side pulls that run through `sudo` now get `DOCKER_CONFIG="$HOME/.docker"`, expanded by the SSH user's shell before `sudo` resets `HOME`, so they use the login the Registries tab writes ([#12216](https://github.com/coollabsio/coolify/pull/12216)). Covered: build-server deploys (the pre-pull and `up --pull always`), image pulls on additional servers, the registry fallback check, one-click service start and deploy, standalone database start, and the proxy. **Not covered at 4.6.0:** an application deploy's `docker compose up -d` when the resource preserves its repository or uses raw compose deployment — it still runs as root without the prefix, so `pull_policy: always` still breaks there. `02-docker-compose.md` §8B.
+Host-side pulls that run through `sudo` now get `DOCKER_CONFIG="$HOME/.docker"`, expanded by the SSH user's shell before `sudo` resets `HOME`, so they use the login the Registries tab writes ([#12216](https://github.com/coollabsio/coolify/pull/12216)). Covered: build-server deploys (the pre-pull and `up --pull always`), image pulls on additional servers, the registry fallback check, one-click service start and deploy, standalone database start, and the proxy. **Not covered at 4.7.1:** an application deploy's `docker compose up -d` when the resource preserves its repository or uses raw compose deployment — it still runs as root without the prefix, so `pull_policy: always` still breaks there. `02-docker-compose.md` §8B.
 
 ### 4.5.1–4.5.3 — smaller changes that alter an action
 
@@ -243,11 +243,46 @@ What still carries legacy escaping is what always did: a plain `FOO=${FOO}` refe
 - **Helper cleanup removes only finished deployments' helpers**; it used to kill the helpers of running backups, imports and file browsers.
 - Docker Desktop on Windows is no longer supported.
 
+### 4.7.0 — the deploy queue
+
+- **A webhook push cancels the application's older queued webhook deployments**, on by default for every existing application (`is_auto_cancel_queued_deployments_enabled` defaults to true). Only the latest commit builds. Per application, pull request and server. Manual, API, restart and rollback deployments are never cancelled. An opt-in setting also stops an older webhook deployment that is still building. Turn it off under Advanced → Deployment where every commit must deploy.
+- **`cancel_previous` on `/api/v1/deploy`** (`none`, `queued`, `building`; default `none`) does the same for webhook, API and MCP deployments (`07-github-actions-deployment.md` §7).
+- **MCP deploys queue** behind a deployment in progress like the API does, and a deploy of the commit already deploying is skipped. A rolling update removes only the containers that ran before it started.
+- **Build-server concurrency limits are honoured**: each build counts on the server that runs it.
+
+### 4.7.0 — SSH, access and the API
+
+- **Server SSH host keys are pinned on first connection.** `SSH_HOST_KEY_CHECKING` is `warn` by default — a changed key notifies the team but still connects — or `enforce`, which refuses until an admin trusts the new key on the server's **Security** page, or `off`. Enforcement can also be set per server. Git hosts' keys are pinned per application across deploys.
+- **New SSH keys are Ed25519**; new RSA keys 4096-bit (GitHub rejected 2048-bit deploy keys). Private keys are validated more strictly and can be rotated across every server that uses them.
+- **Members with access grants** need access to the server too: a new, cloned or migrated resource needs a server they can use, localhost needs an instance admin, and server lists show only usable servers. Team private keys, GitHub and Gitea Apps need team-wide write. API responses for applications, databases and services include server data only for tokens that cover the whole team.
+- **Token limits apply to more checks**, and a token or IP that fails 30 requests a minute gets `429` (`API_FAILED_REQUEST_RATE_LIMIT`).
+- **API changes that touch previews and rollbacks need more**: opening a preview, changing its URL, Git type or tag, or choosing a commit needs `write`; a `deploy` token can only redeploy an existing preview. A rollback must target a listed rollback image or a successful production deployment. `git_repository` and `/deploy`'s `docker_tag` are validated like the UI.
+- **The cloud provider token API** is limited to team admins and owners (`403` otherwise). Resend settings move to `resend_from_address` and `resend_from_name`.
+
+### 4.7.0 — smaller changes that alter an action
+
+- **Server shared variables (`{{server.*}}`) resolve in Docker Compose**; their values are redacted in the rendered file.
+- **Multiline values keep their trailing newline**, and **locked variables stay locked** (`03-environment-variables.md` §5). A legacy multi-line JSON value — which wrote an unquoted, unreadable `.env` line (#8279) — switches to exact escaping.
+- **Compose service names** must match Docker's container-name rule (`02-docker-compose.md` §3).
+- **Compose previews get their own Compose project** (`<uuid>-pr-<n>`) and each service's original name as a network alias, so services in a preview reach each other by name. `COOLIFY_BRANCH` is `pull/<n>/head` everywhere in a preview.
+- **`--add-host` on build servers** leaves out preview containers, the deployment server's hosts and short-lived helpers, so a preview no longer invalidates the build cache. A per-application setting (`include_network_hosts_in_build`, on by default) drops network hosts from the build entirely.
+- **A deleted volume stays deleted** when the image declares `VOLUME` at its path: containers still mounting it are removed before the new ones start. Renaming a persistent volume asks for confirmation, because the new name is a new, empty volume.
+- **A one-click service `Restart` pulls missing images before stopping**, and fails without stopping if a pull fails (#12485).
+- **Services removed from a one-click service's compose** show `Not in Compose file` instead of `Exited`; their settings are kept for a re-add.
+- **Dockerfile `HEALTHCHECK` options are parsed as Docker reads them**, from the stage actually built.
+- **The helper trusts the server's CA bundle**, so builds behind a TLS-inspecting proxy work.
+- **New databases default to** PostgreSQL 18, MongoDB 9, MySQL 9.7, MariaDB 12.3, ClickHouse 26.8, and Valkey 9 for Redis. Existing databases keep their image.
+- **Scheduled tasks** skip runs with no running container, disable themselves after sustained failure, and can run without a shell (`05-php-applications.md`, Scheduler).
+- **Image vulnerability scanning** (Syft and Grype, on the server, opt-in per server and application) with an optional deploy gate. On 4.7.0 scans fail on self-hosted instances (scanner templates missing from the image); fixed in 4.7.1.
+- **SFTP, FTPS and WebDAV backup storages**, and `skip_tls_verification` on S3 storages.
+- **Caddy keeps WebSockets open** across configuration reloads.
+- **Sentinel 1.1.5**; Sentinel reads its token from an env file. Helper 1.0.19 and Traefik 3.7.16 unchanged.
+
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 
 **The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged.
 
-Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22, v4.4.6 and v4.5.0**. Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
+Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22, v4.4.6 and v4.5.0**, and the config mount unchanged through **v4.7.1** (4.7.0 adds a read-only mount of the server's CA bundle beside it, and pins the helper's `DOCKER_CONFIG` to `/root/.docker` so a build-time `HOME` or `DOCKER_CONFIG` variable cannot move it). Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
 
 **What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance. Its absence no longer does: from 4.5.0 it is logged only when the compose file has registry-image services and no custom build command (§3, 4.5.0).
 

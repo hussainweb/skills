@@ -25,7 +25,7 @@ Consequences to internalise:
 | Setting | Meaning |
 | --- | --- |
 | **Base Directory** | Root path within the repo. `/` for a root-level compose file, `/backend` for a subfolder |
-| **Docker Compose Location** | Path to the file, extension included and exact (`.yml` vs `.yaml` matters) |
+| **Docker Compose Location** | Path to the file, extension included and exact (`.yml` vs `.yaml` matters). Relative to the base directory — and so are the paths **inside** the file: Coolify runs Compose with the base directory as `--project-directory`, so `build.context: ..` in `/deploy/docker-compose.yml` resolves from the base directory, not from `/deploy`. Since 4.7.0 the UI warns about a file in a subdirectory and offers to make that subdirectory the base directory |
 | **Branch** | Detected from the repository |
 | **Custom build command** | Overrides `docker compose build` |
 | **Custom start command** | Overrides `docker compose up -d` |
@@ -97,7 +97,9 @@ services:
 
 ### Keep service names simple
 
-Lowercase, no dots, ideally no hyphens: `web`, `worker`, `redis`, `solr`. Coolify 4.3.0 shipped fixes for compose domains, environment variables and proxy router names on service names containing dots or hyphens — evidence that this is a rough edge. A hyphen is tolerable; a dot is asking for trouble.
+Lowercase, no dots, ideally no hyphens: `web`, `worker`, `redis`, `solr`. Coolify 4.3.0 shipped fixes for compose domains, environment variables and proxy router names on service names containing dots or hyphens — evidence that this is a rough edge, and 4.7.0 fixed another (`api.test` nested as `api: {test: …}` on an image update). A hyphen is tolerable; a dot is asking for trouble.
+
+Since 4.7.0 a name must also match Docker's container-name rule, `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`, because Coolify starts each container name with it. Anything else is rejected when the file is parsed.
 
 ## 4. Domains and routing
 

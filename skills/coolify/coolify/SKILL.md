@@ -1,6 +1,6 @@
 ---
 name: coolify
-description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.6.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
+description: Deploy and operate applications on self-hosted Coolify (v4.1+, current line 4.7.x). Use this skill whenever Coolify is mentioned or present — a repo whose docker-compose.yml is deployed by Coolify, a COOLIFY_* variable, a coolify-proxy or coolify-db container, a deploy webhook — and whenever writing or reviewing a docker-compose.yml, Dockerfile, or CI workflow that targets a Coolify server. Triggers on "coolify", "deploy webhook", "SERVICE_FQDN", "COOLIFY_FQDN", "coolify-proxy", "no available server", "503 from my app", "deploy to my VPS with coolify".
 allowed-tools: Read, Glob, Grep, Bash, WebFetch
 ---
 
@@ -32,7 +32,7 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.6.x** (4.6.0 on 2 Nov 2026). Upgrade from 4.4.x **straight to 4.6.0**: on 4.5.x, a Compose resource's pre-existing variables containing `\`, `'` or `"` change value in the container, and 4.6.0 fixes that (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
+| Stable line at time of writing | **4.7.x** (4.7.0 and 4.7.1 on 9 Nov 2026; use 4.7.1). Upgrade from 4.4.x **straight to 4.6.0 or later**: on 4.5.x, a Compose resource's pre-existing variables containing `\`, `'` or `"` change value in the container, and 4.6.0 fixes that (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
 | First stable 4.0.0 | 27 Apr 2026 |
 | State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405`. `POST /enable` removed in 4.5.0. Deletes need the **`delete`** ability since 4.6.0 (existing `write` tokens were given it) |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional (caddy-docker-proxy 2.13 since 4.4.0) |
@@ -41,6 +41,8 @@ Known-current facts, useful as a sanity anchor:
 | Domain ports | Stored separately from the domain since 4.3.15 (`domain_port_overrides`); the URL itself is portless |
 | Sentinel | **Mandatory** on regular servers since 4.3.19; the toggle is read-only in UI and API |
 | Compose `scale` / `deploy.replicas` | **Rejected above 1** since 4.5.0 — declare each instance as its own service |
+| Webhook deploys | Since 4.7.0 a push **cancels older queued webhook deployments** by default; API deploys only with `cancel_previous` |
+| Server SSH host keys | **Pinned on first connection** since 4.7.0 (`SSH_HOST_KEY_CHECKING`: `warn` default, `enforce`, `off`) |
 
 Full version-sensitivity guidance and recent breaking changes: `references/01-architecture-and-versions.md`. The table row above is also the **analysis anchor** — the last version examined in detail. Anything newer is unexamined; see `references/09-tracking-releases.md`.
 

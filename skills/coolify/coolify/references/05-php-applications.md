@@ -139,7 +139,13 @@ worker:
 
 ### Scheduler
 
-Prefer Coolify's **Scheduled Tasks** (a cron expression against a named container) over a sidecar running `cmd; sleep 60` in a loop. The trade is explicitness — the schedule then lives in the UI rather than in the repository, so leave a comment in the compose file naming what runs outside it. Do not give a resource that runs scheduled tasks a custom container-name prefix: with more than one container, the task can no longer find its target (`01-architecture-and-versions.md` §3, 4.5.0).
+Prefer Coolify's **Scheduled Tasks** (a cron expression against a named container) over a sidecar running `cmd; sleep 60` in a loop. The trade is explicitness — the schedule then lives in the UI rather than in the repository, so leave a comment in the compose file naming what runs outside it. Do not give a resource that runs scheduled tasks a custom container-name prefix: with more than one container, the task can no longer find its target (`01-architecture-and-versions.md` §3, 4.5.0; still so at 4.7.1).
+
+Since 4.7.0:
+
+- A task **skips** a run while the resource has no running container, silently — no failure, no notification. A stopped resource's cron simply does not happen.
+- A task that keeps failing **disables itself** after ten failures in a row once the first is over 24 hours old, with one notification. Re-enable it on its page once the cause is fixed. Failure notifications come at the first failure and then at most daily, so a broken cron is quieter than it was.
+- **Run in a shell** (on by default) runs the command through a shell. Turn it off for a distroless or scratch image with no `sh`; the command is then split into arguments and run directly, so pipes, `&&` and variable expansion stop working.
 
 ### Sessions
 

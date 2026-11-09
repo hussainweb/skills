@@ -142,5 +142,17 @@
       "explains_shared_tags_risk",
       "recommends_distinct_image_name_per_application"
     ]
+  },
+  {
+    "id": 12,
+    "prompt": "Since our Coolify instance auto-updated this week, some of our deployments show as Cancelled even though nobody cancelled them. We push to main several times an hour and Coolify deploys from the GitHub App webhook. Is something broken?",
+    "expected_output": "The agent should establish the Coolify version and explain that since 4.7.0 a webhook push cancels the application's older queued webhook deployments by default (is_auto_cancel_queued_deployments_enabled, on for existing applications), so only the latest commit builds; manual, API, restart and rollback deployments are never cancelled, and a deployment already replacing containers finishes. Nothing is broken. If every commit must deploy, turn it off under Advanced > Deployment (or via the applications API). It should not suggest downgrading or treat this as a failure.",
+    "files": [],
+    "assertions": [
+      "establishes_coolify_version",
+      "explains_4_7_0_auto_cancel_of_queued_webhook_deployments",
+      "states_only_webhook_deployments_are_cancelled_by_default",
+      "explains_how_to_turn_it_off"
+    ]
   }
 ]
