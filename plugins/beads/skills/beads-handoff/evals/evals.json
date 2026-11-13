@@ -1,0 +1,43 @@
+[
+  {
+    "id": 1,
+    "prompt": "/beads-handoff — in this conversation you finished and tested site-40 (committed as a1b2c3d), got halfway through site-42 (form handler not written, tests not run), and we found that the role list needs per-user caching. I'm closing this chat now.",
+    "expected_output": "The agent reads `bd list --status in_progress,blocked`, `bd memories`, git status and `bd show` for site-40 and site-42 before planning. It shows one plan: close site-40 with a reason naming a1b2c3d; a dated resume note on site-42 (done, left, next step, how to verify, uncommitted state) appended with `bd note`, never `--notes`; a new task for per-user caching with `--deps discovered-from:site-42`; no new memory. It applies nothing until the user confirms, applies creates before notes and closes, re-reads `bd show site-42` to check a fresh agent could continue, and ends with a few-line prompt pointing at site-42.",
+    "assertions": [
+      "reads_tracker_and_git_state_before_planning",
+      "shows_one_plan_and_applies_nothing_before_confirmation",
+      "closes_finished_bead_with_reason_naming_the_commit",
+      "writes_dated_resume_note_with_done_left_next_step_and_verification",
+      "appends_notes_with_bd_note_never_replaces_with_notes_flag",
+      "creates_discovered_work_with_discovered_from_dependency",
+      "adds_no_memory_for_area_specific_or_one_off_content",
+      "checks_the_beads_read_back_stand_alone_after_applying",
+      "ends_with_a_short_next_conversation_prompt_pointing_at_beads"
+    ],
+    "files": []
+  },
+  {
+    "id": 2,
+    "prompt": "/beads-handoff — we spent most of this session chasing a flaky test caused by a fixture we've now deleted, we decided all API routes must go through the gateway module from now on, and I claimed site-17 but we never touched it.",
+    "expected_output": "The flaky test is listed under 'not tracked' because it can't recur, not stored as a memory. The gateway decision passes the memory test as project direction, so the agent searches existing memories first and proposes an update in place if one covers routing, otherwise a new memory, and shows its full text in the plan. site-17 is set back to open with a note saying it was claimed but not started. The agent does not push.",
+    "assertions": [
+      "does_not_store_a_one_off_bug_that_cannot_recur",
+      "proposes_memory_only_for_project_direction_and_shows_full_text",
+      "searches_existing_memories_before_proposing_a_new_one",
+      "returns_claimed_but_untouched_bead_to_open_with_a_note",
+      "does_not_push_without_instruction"
+    ],
+    "files": []
+  },
+  {
+    "id": 3,
+    "prompt": "/beads-handoff focus on the search epic next — we left open whether to use Solr or OpenSearch, and the user said change the cache note to say 'per role' not 'per user' when you show the plan.",
+    "expected_output": "The open Solr vs OpenSearch question becomes a decision bead or a note on the search epic, with the options and any leaning. When the user edits the plan, the agent applies their version without arguing. The closing prompt names the search epic as the focus given in the argument.",
+    "assertions": [
+      "records_open_question_as_decision_bead_or_note_with_options",
+      "applies_user_changes_to_the_plan_without_arguing",
+      "next_conversation_prompt_uses_the_focus_from_the_argument"
+    ],
+    "files": []
+  }
+]
