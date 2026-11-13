@@ -21,6 +21,8 @@ Coolify 4 was in beta (`4.0.0-beta.1` … `4.0.0-beta.4xx`) for roughly two year
 | 4.4.7, 4.3.24, 4.2.1, 4.1.3, 4.0.1 | 21 Oct 2026 | **Security release on every v4 line** — PHP 8.4.27 for PHP2Shell (CVE-2026-109618/109619), cloudflared, Sentinel 1.1.2. Lines before 4.4 update with `curl -fsSL https://cdn.coollabs.io/coolify/patch.sh \| sudo bash`; upstream recommends 4.4.7 or later, since other security fixes were not backported |
 | 4.5.0 | 23 Oct 2026 | **Breaking:** compose `scale`/`replicas` > 1 rejected; `POST /enable` removed; more API routes need `deploy`. **Behaviour change:** pre-pull skips locally built images; new variables pass exact values |
 | 4.6.0 | 2 Nov 2026 | **Breaking:** API deletes need the `delete` ability. **Fixes** the 4.5.0 legacy-escaping regression on Compose resources ([#12408](https://github.com/coollabsio/coolify/issues/12408)). Per-project and per-resource access for members and tokens; update channels; deploys rejected when two applications build the same Docker image name |
+| 4.7.0, 4.7.1 | 9 Nov 2026 | **Behaviour change:** webhook pushes cancel older queued webhook deployments by default; server and Git SSH host keys pinned; failing API clients throttled. 4.7.1 fixes image scans on self-hosted instances. **On a fresh install the first account cannot be registered** (fixed in 4.7.2) |
+| 4.7.2–4.7.5 | 9–10 Nov 2026 | **Fixes:** first-account registration on fresh installs (4.7.2); previews get production runtime variables that have no preview copy again, missing since 4.5.1 (4.7.4). Otherwise image-scan limits and exports, backup fixes |
 
 The practical consequence: **"Coolify 4" is not a usable version identifier**, and material written before mid-2026 — including most blog posts, most forum answers, and most of a language model's recalled knowledge — describes the beta era. Recalled details about schema columns, API verbs, generated labels and UI locations are frequently wrong.
 
@@ -278,11 +280,20 @@ What still carries legacy escaping is what always did: a plain `FOO=${FOO}` refe
 - **Caddy keeps WebSockets open** across configuration reloads.
 - **Sentinel 1.1.5**; Sentinel reads its token from an env file. Helper 1.0.19 and Traefik 3.7.16 unchanged.
 
+### 4.7.2–4.7.5 — fixes that alter an action
+
+- **The first root account could not be registered on a fresh 4.7.0 or 4.7.1 install.** 4.7.0 stored the ten-minute setup window's closing time in the cache and checked it with `is_int()`, but Redis returns it as a string, so the window was closed from the moment Coolify started — and restarting, the 4.5.1 advice, did not reopen it. Fixed in 4.7.2 (`aa016e685`). Install 4.7.2 or later.
+- **Previews get production runtime variables again.** From 4.5.1 to 4.7.3 a preview deployment got only its own preview variables; a production runtime variable with no preview copy was missing from the preview container. 4.7.4 (`c49d9f623`) passes those again, with two conditions read in the tag: the application must have **at least one runtime preview variable**, and **public PR deployments must be off** — with them on, a preview can run a fork's code and never gets production values. Each preview deployment now logs, as a warning, the variables it does not get. Previews deployed before 4.5.1 keep the production values they had.
+- **Destination `Redeploy` and `Stop`** act only on servers and networks the application uses (4.7.2, security fix).
+- **Image scanning** gets per-server memory, CPU and Syft/Grype time limits (`image_scan_memory_mb`, `image_scan_cpus`, `image_scan_syft_timeout`, `image_scan_grype_timeout`; default memory 1 GB, Grype 10 minutes) and an export of the vulnerability lists (4.7.2–4.7.3). Large images that failed to scan on 4.7.1 should scan after raising these.
+- **Failed database backup records** older than 60 days are deleted by the daily cleanup (4.7.4). SFTP backup storages connect over IPv6 (4.7.5).
+- Helper, Sentinel and Traefik versions unchanged from 4.7.1.
+
 ### The helper takes the SSH user's docker config, or none — and 4.3.19 made it bite
 
 **The registry-auth behaviour itself is long-standing, not a 4.3.19 change.** `ApplicationDeploymentJob` resolves the server's home directory over SSH and mounts `$HOME/.docker/config.json` into the helper container — **and if that file does not exist, it starts the helper with no config mount at all, so every registry pull is anonymous.** No warning is logged.
 
-Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22, v4.4.6 and v4.5.0**, and the config mount unchanged through **v4.7.1** (4.7.0 adds a read-only mount of the server's CA bundle beside it, and pins the helper's `DOCKER_CONFIG` to `/root/.docker` so a build-time `HOME` or `DOCKER_CONFIG` variable cannot move it). Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
+Verified line-for-line identical at **v4.1.2, v4.3.2, v4.3.18, v4.3.19, v4.3.22, v4.4.6 and v4.5.0**, and the config mount unchanged through **v4.7.5** (4.7.0 adds a read-only mount of the server's CA bundle beside it, and pins the helper's `DOCKER_CONFIG` to `/root/.docker` so a build-time `HOME` or `DOCKER_CONFIG` variable cannot move it). Only the build-server path throws on a missing config; the ordinary path silently omits the mount. 4.4.0's Registries tab writes exactly this file (above).
 
 **What 4.3.19 actually changed** is commit `361d5a3c8 feat(deploy): pull compose images before stopping containers`. The image pull moved earlier in the deploy, which is what turns a pre-existing anonymous-pull condition into a visible, deploy-aborting failure. The log line `Pulling image-based services before stopping the current deployment` is absent at 4.3.14 and 4.3.18 and present at 4.3.19 — so its appearance in a deploy log dates the instance. Its absence no longer does: from 4.5.0 it is logged only when the compose file has registry-image services and no custom build command (§3, 4.5.0).
 

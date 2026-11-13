@@ -32,7 +32,7 @@ Known-current facts, useful as a sanity anchor:
 
 | Fact | Value |
 | --- | --- |
-| Stable line at time of writing | **4.7.x** (4.7.0 and 4.7.1 on 9 Nov 2026; use 4.7.1). Upgrade from 4.4.x **straight to 4.6.0 or later**: on 4.5.x, a Compose resource's pre-existing variables containing `\`, `'` or `"` change value in the container, and 4.6.0 fixes that (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
+| Stable line at time of writing | **4.7.x**, analysed to **4.7.5** (10 Nov 2026). Avoid 4.7.0–4.7.1 on a fresh install: the first account cannot be registered (fixed in 4.7.2). Upgrade from 4.4.x **straight to 4.6.0 or later**: on 4.5.x, a Compose resource's pre-existing variables containing `\`, `'` or `"` change value in the container, and 4.6.0 fixes that (`references/03-environment-variables.md` §5). Anything older must be on its line's **security release** — 4.4.7, 4.3.24, 4.2.1, 4.1.3 or 4.0.1, all 21 Oct 2026 (PHP2Shell, CVE-2026-109618/109619). **Skip 4.3.22, 4.4.4 and 4.4.5** |
 | First stable 4.0.0 | 27 Apr 2026 |
 | State-changing API endpoints | **POST only** since 4.2.0 — `GET` returns `405`. `POST /enable` removed in 4.5.0. Deletes need the **`delete`** ability since 4.6.0 (existing `write` tokens were given it) |
 | Proxy | Traefik (v3.7 tracked since 4.3.0); Caddy optional (caddy-docker-proxy 2.13 since 4.4.0) |

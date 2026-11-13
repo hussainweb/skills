@@ -154,5 +154,18 @@
       "states_only_webhook_deployments_are_cancelled_by_default",
       "explains_how_to_turn_it_off"
     ]
+  },
+  {
+    "id": 13,
+    "prompt": "We use preview deployments for pull requests. Production has DATABASE_URL and STRIPE_KEY set, and on the Preview Deployments tab we only set APP_ENV=preview. Our previews have been crashing for a few weeks because DATABASE_URL is empty in the container. Coolify is on 4.6.0. What's going on?",
+    "expected_output": "The agent should establish the Coolify version and explain that from 4.5.1 to 4.7.3 a preview deployment gets only its own preview variables, so production runtime variables with no preview copy (DATABASE_URL here) are missing from the preview container. 4.7.4 restores the fallback, but only when the application has at least one runtime preview variable (APP_ENV qualifies if marked runtime) and public PR deployments are off; with public PR deployments on, a preview never gets production values because it may run a fork's code. Recommend upgrading to 4.7.4+ or adding DATABASE_URL (ideally a preview-specific database, and probably not the live STRIPE_KEY) under Environment Variables > Preview Deployments, and checking the preview deployment log for the list of variables it does not get.",
+    "files": [],
+    "assertions": [
+      "establishes_coolify_version",
+      "explains_previews_lacked_production_runtime_variables_4_5_1_to_4_7_3",
+      "states_4_7_4_conditions_runtime_preview_variable_and_public_pr_off",
+      "recommends_upgrade_or_adding_preview_variable",
+      "cautions_against_production_secrets_in_previews"
+    ]
   }
 ]
