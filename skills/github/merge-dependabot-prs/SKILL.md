@@ -4,7 +4,7 @@ description: Merge open Dependabot pull requests in a GitHub repository using th
 allowed-tools: Bash, Read
 metadata:
   authors: "Hussain Abbas"
-  version: "1.6.0"
+  version: "1.6.1"
 ---
 
 # Merge Dependabot PRs
@@ -26,6 +26,7 @@ Apply these unless the user says otherwise in the same request:
 | Held-back majors | Assessed, not merged | "Skipped: major" gives the user nothing to decide with. |
 | CI gate | Every check concluded successfully | Green is the only evidence a bump is safe. Pending is not passed; no checks is no evidence. |
 | Workflow approvals | Never without a yes | Approving runs code with repo permissions. |
+| Failing PRs | Skipped, then offered a fix | A fix pushes code to the PR; the user decides which to attempt. |
 | Merge method | `--rebase` | Linear history, no merge commits for dependency churn. |
 | Branch cleanup | `--delete-branch` | Dependabot branches are disposable. |
 | Repository | The working directory's | `--repo OWNER/REPO` when the user names another. |
@@ -43,6 +44,7 @@ Common overrides:
 - "merge #42 and #47" → that explicit list, default gates still applied unless told not to.
 - "just merge, don't analyse the majors" → skip step 6; list held-back majors by number and
   version only.
+- "and fix the failing ones" → that is the yes for step 8 on every red PR; skip the question.
 
 When an override loosens a safety gate (merging majors, merging with red or pending checks,
 `--admin` past branch protection), say plainly what will be merged and get a yes first.
@@ -324,6 +326,28 @@ Same grouped-bullet form as the plan:
 Call out held-back or skipped security updates (Dependabot labels them `security`). A
 skipped security fix on a major is the one leftover that wants attention rather than a
 re-run tomorrow.
+
+### 8. Offer to fix the failing PRs
+
+If any PR was left open because its checks are red (skipped at the start, or red after a
+rebuild), end the report by asking whether to attempt fixes. Name each PR with a line on
+what failed, from the failing job's log (`gh run view <run-id> --log-failed`), so the user
+can pick:
+
+> #61 eslint 9.18 → 9.19: `no-unused-vars` now flags two catch bindings in `src/api.ts`.
+> #64 vitest 2.1 → 3.0: config rejects `test.coverage.all`.
+> Shall I try fixing these? I'd commit each fix on its PR branch and merge once CI is
+> green.
+
+Don't fix anything without a yes; the user may want some of them left. On a yes, follow
+[references/fixing-failing-prs.md](references/fixing-failing-prs.md). The fix goes on the PR
+branch, never on the base, so the bump and what it needed land together and stay reviewable
+as one PR. Work the chosen PRs one at a time, then report them in the same form: fixed and
+merged, or still open with what you tried.
+
+Skip the question when there are no red PRs, and when the user already said to fix them
+(see overrides). PRs held for other reasons (majors, no CI, `unknown` bumps) aren't
+failing; don't offer to fix those.
 
 ## Notes on the moving parts
 

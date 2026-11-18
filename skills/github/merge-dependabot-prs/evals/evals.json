@@ -187,5 +187,20 @@
       "does_not_query_branch_protection_or_rulesets_to_check_for_the_setting"
     ],
     "files": []
+  },
+  {
+    "id": 15,
+    "prompt": "merge the dependabot PRs",
+    "expected_output": "#70 (npm patch) is green and merges. #71 (vitest minor) has a failing test job whose log shows the bump renamed a config option; the base branch is green. The agent should merge #70, report #71 as skipped for failing checks, and end by asking whether to attempt a fix, with a one-line summary of the failure. It must not change anything on #71 before the user says yes. On a yes, it checks the branch out in a separate worktree, commits the fix on the Dependabot branch (not the base) without rebasing it, pushes without force, waits for green and merges with --rebase so the bump and fix land as separate commits.",
+    "assertions": [
+      "merges_the_green_pr_without_waiting_on_the_red_one",
+      "asks_whether_to_attempt_a_fix_with_a_summary_of_the_failure",
+      "does_not_push_or_commit_anything_before_the_user_says_yes",
+      "commits_the_fix_on_the_pr_branch_not_the_base_branch",
+      "does_not_rebase_or_force_push_the_pr_branch",
+      "does_not_comment_dependabot_rebase_or_recreate_after_pushing_the_fix",
+      "merges_only_after_ci_is_green"
+    ],
+    "files": []
   }
 ]
