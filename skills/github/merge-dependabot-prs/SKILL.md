@@ -4,18 +4,17 @@ description: Merge open Dependabot pull requests in a GitHub repository using th
 allowed-tools: Bash, Read
 metadata:
   authors: "Hussain Abbas"
-  version: "1.5.0"
+  version: "1.6.0"
 ---
 
 # Merge Dependabot PRs
 
-Batch-merge Dependabot's open pull requests through the `gh` CLI, applying a conservative
-default filter so routine dependency noise lands without a human reading every diff, while
-anything that could actually break the build stays put for a person to look at.
+Batch-merge Dependabot's open pull requests through the `gh` CLI. A conservative default
+filter lets routine dependency noise land without a human reading every diff, and leaves
+anything that could break the build for a person to look at.
 
-This skill only runs when the user asks for it. Never merge PRs opportunistically because
-you noticed some open ones while doing something else — merging is outward-facing and
-awkward to unwind, so it should always be a thing the user asked for.
+Run only when the user asks. Never merge PRs because you noticed some while doing something
+else: merging is outward-facing and awkward to unwind.
 
 ## Defaults
 
@@ -23,37 +22,32 @@ Apply these unless the user says otherwise in the same request:
 
 | Decision | Default | Why |
 |---|---|---|
-| Version scope | Minor and patch bumps only | Major bumps carry intentional breaking changes and deserve a human. |
-| Held-back majors | Assessed, not merged | "Skipped: major" hands the user nothing to decide with; a short risk read-out for this project does. |
-| CI gate | Every check must have concluded successfully | A green build is the only evidence the bump is safe. Pending counts as not-yet-passed, and no checks at all counts as no evidence. |
-| Workflow approvals | Always confirm before approving | Automated pipeline commits trigger `action_required` on subsequent runs. Approving runs code with repo permissions; never approve without user confirmation. |
-| Stale branches | Green on an old base is partial evidence | CI ran against the commit the branch was cut from. If the base has moved, a smaller suite may have run, and the output will not say so. |
-| Merge method | `--rebase` | Keeps history linear; no merge commits for dependency churn. |
-| Branch cleanup | `--delete-branch` | Dependabot branches are disposable and pile up fast. |
-| Repository | The one in the working directory | Pass `--repo OWNER/REPO` when the user names a different one. |
-| Ordering | One at a time, oldest PR number first | Each merge moves the base branch; serialising keeps the failure mode legible. |
+| Version scope | Minor and patch only | Majors carry intentional breaking changes. |
+| Held-back majors | Assessed, not merged | "Skipped: major" gives the user nothing to decide with. |
+| CI gate | Every check concluded successfully | Green is the only evidence a bump is safe. Pending is not passed; no checks is no evidence. |
+| Workflow approvals | Never without a yes | Approving runs code with repo permissions. |
+| Merge method | `--rebase` | Linear history, no merge commits for dependency churn. |
+| Branch cleanup | `--delete-branch` | Dependabot branches are disposable. |
+| Repository | The working directory's | `--repo OWNER/REPO` when the user names another. |
+| Ordering | Clear PRs first, then rebuild-and-merge one at a time per ecosystem | Each merge moves the base; rebuilding ahead of it wastes CI. |
 
-The user's phrasing overrides any of these. Common overrides and what they mean:
+Common overrides:
 
-- "include majors" / "everything" → drop the version filter; still respect the CI gate.
+- "include majors" / "everything" → drop the version filter; keep the CI gate.
 - "only patches" → tighten the version filter.
-- "even if checks are failing" / "don't wait for CI" → drop the CI gate (see the caution below).
-- "squash them" / "use a merge commit" → `--squash` or `--merge` instead of `--rebase`.
+- "even if checks are failing" / "don't wait for CI" → drop the CI gate.
+- "squash them" / "use a merge commit" → `--squash` or `--merge`.
 - "keep the branches" → drop `--delete-branch`.
-- "just the GitHub Actions ones" / "only npm" → filter by ecosystem, visible in the
-  dependency names and Dependabot's labels.
-- "merge #42 and #47" → operate on that explicit list, still applying the default gates
-  unless told not to.
-- "just merge, don't analyse the majors" / "skip the write-up" → leave out the risk
-  assessment in step 5 and report the held-back majors by number and version only.
+- "just the GitHub Actions ones" / "only npm" → filter by ecosystem (dependency names and
+  Dependabot's labels show it).
+- "merge #42 and #47" → that explicit list, default gates still applied unless told not to.
+- "just merge, don't analyse the majors" → skip step 6; list held-back majors by number and
+  version only.
 
-When an override loosens a safety gate — merging majors, merging with red or pending
-checks, using `--admin` to bypass branch protection — say plainly what will be merged and
-get a yes before doing it. The user asking for the loosened behaviour is the reason to
-offer it, not a reason to skip the confirmation, because these are exactly the merges that
-are expensive to discover after the fact. Similarly, approving a workflow that requires
-approval (`action_required`) triggers execution on GitHub Actions runners; always state
-which PR and commit triggered it and obtain user confirmation before approving.
+When an override loosens a safety gate (merging majors, merging with red or pending checks,
+`--admin` past branch protection), say plainly what will be merged and get a yes first.
+The user asking for it is the reason to offer it, not to skip confirming: these are the
+merges that are expensive to discover after the fact.
 
 ## Workflow
 
@@ -61,433 +55,298 @@ which PR and commit triggered it and obtain user confirmation before approving.
 
 ```bash
 gh auth status
+gh repo view --json nameWithOwner,defaultBranchRef,rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed
+gh pr list --author app/dependabot --state open --json baseRefName \
+  --jq '[.[].baseRefName] | unique'                     # --repo as usual
 ```
 
-If `gh` is missing or unauthenticated, stop and say so — everything downstream needs it.
+If `gh` is missing or unauthenticated, stop and say so. If the planned merge method is
+disabled, ask which allowed one to use rather than falling back silently; it changes what
+lands in history.
 
-Then confirm the repository allows the merge method you plan to use:
+The merges land on each PR's base branch (`BASE` below). Take it from the PRs: a
+`target-branch` in `dependabot.yml` can point them away from the default branch, and some
+repos have more than one.
+
+#### The local checkout
+
+Work out how the checkout relates to `BASE` before the remote moves. It decides what the
+plan has to warn about and what step 5 can safely do. Skip this and step 5 when the working
+directory isn't a checkout of the target repository; say so in the report.
 
 ```bash
-gh repo view --json nameWithOwner,rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed
+git fetch origin
+git status --short --branch                         # current branch, uncommitted work
+git rev-parse --verify --quiet "refs/heads/$BASE"   # is there a local BASE?
+git log --oneline --stat "origin/$BASE..$BASE"      # local commits not on the remote
+git worktree list                                   # is BASE checked out elsewhere?
 ```
 
-If rebase merging is disabled, don't silently fall back to another method — the merge
-strategy changes what lands in history, so ask which of the allowed methods to use.
+Check for unpushed commits on `BASE` whichever branch the user is on. Every PR's CI ran
+against the remote base, and these commits will land after the batch without having been
+tested with it. One that touches the same manifest or lockfile can make a PR redundant or
+conflicting; one that changes code calling the dependency, or the CI config, can break a
+bump that looks green. If there are any, lead the plan with an "Unpushed local commits"
+heading: their subjects, flagging those that touch manifests, lockfiles, CI config or code
+using a dependency in the batch. Then stop for confirmation. The better order is usually to
+push first, let Dependabot rebase and CI rerun, then merge. Offer to push; don't push
+unasked. If the user says merge anyway, go ahead.
+
+Then note which of these the checkout is in:
+
+- **On `BASE`.** Step 5 fast-forwards it. If there are uncommitted changes, note them in the
+  plan: if they touch a file the batch changes, the fast-forward will refuse.
+- **On another branch, or detached HEAD.** A plain `git pull` here pulls the wrong branch,
+  and `git pull origin $BASE` would merge the base into the user's branch. Say in the plan
+  that you'll update `BASE` in place and leave their branch alone. If their branch edits a
+  manifest or lockfile the batch also bumps, mention the conflict waiting for their next
+  rebase. Not a reason to stop.
+- **No local `BASE`.** Nothing local to update beyond the fetch.
+- **`BASE` checked out in another worktree.** It can't be updated from here; step 5 names
+  the path.
 
 ### 2. Inventory and classify
 
-Run the bundled script. It is read-only and does the fiddly parts consistently: reads
-Dependabot's `updated-dependencies` commit trailer, falls back to comparing the versions in
-"Bumps X from A to B" when the trailer omits `update-type` (it often does), takes the worst
-bump across all members of a grouped PR, and collapses the check rollup into one word.
+Run the bundled script. It is read-only. It reads Dependabot's `updated-dependencies` commit
+trailer, falls back to comparing the "Bumps X from A to B" versions when the trailer omits
+`update-type` (it often does), takes the worst bump across a grouped PR's members, and
+collapses the check rollup into one word.
 
 ```bash
 python3 <skill-dir>/scripts/dependabot_prs.py            # current repo
 python3 <skill-dir>/scripts/dependabot_prs.py --repo OWNER/REPO
-python3 <skill-dir>/scripts/dependabot_prs.py --json     # same data, machine-readable
+python3 <skill-dir>/scripts/dependabot_prs.py --json     # machine-readable
 ```
 
-Each row reports the bump type (`patch`/`minor`/`major`/`unknown`), check state
+Each row gives the ecosystem (from Dependabot's branch name or labels), the bump (`patch`/`minor`/`major`/`unknown`), the checks
 (`pass`/`failing`/`pending`/`none`), GitHub's merge state, and whether the PR clears the
-default policy. Anything the default policy would skip comes with the reason attached.
+default policy, with the reason when it doesn't.
 
-Four classifications need judgement rather than blind application:
+Four results need judgement:
 
-- **`unknown` bump** — usually a SHA-pinned GitHub Action, where there is no version to
-  compare. It is not safe to assume minor. Skip it by default and list it for the user.
-- **`none` checks** — the repo has no CI on that PR, so there is no evidence the bump is
-  safe. An absent gate is not a passed one, so this is a skip, not a merge-with-a-caveat.
-  Report these PRs and tell the user to name specific PR numbers if they want them merged
-  anyway. Do not offer to merge the batch, and do not treat "merge all dependabot PRs" as
-  covering them — a repo with no CI is exactly where a bad batch merge goes unnoticed.
-
-  When a request that names specific numbers comes back ("merge #29 and #31"), that is the
-  deliberate instruction this gate was waiting for: merge them with the usual defaults,
-  no further confirmation needed.
-
-- **`pass` checks on a stale branch** — green proves the bump against the commit the branch
-  was cut from, not against today's base. If the branch has sat while the base moved, the
-  suite that ran may be materially smaller than the one on the base branch now, and nothing
-  in the CI output says so. A passing run reports its own totals, and those look complete
-  unless you already know what the totals ought to be. Partial evidence, not clearance.
-
-  Check it whenever a PR has been open more than a day or two, and always for a major, where
-  the green tick is most of the evidence there is:
+- **`unknown` bump.** Usually a SHA-pinned GitHub Action, with no version to compare. Don't
+  assume minor; skip it and list it.
+- **`none` checks.** No CI ran, so there is no evidence. Skip, not merge-with-a-caveat, and
+  "merge all dependabot PRs" doesn't cover these: a repo with no CI is where a bad batch
+  goes unnoticed. Tell the user to name the PR numbers if they want them. When they do
+  ("merge #29 and #31"), that is the deliberate instruction the gate was waiting for; merge
+  with the usual defaults, no further confirmation.
+- **`pass` on a stale branch.** Green proves the bump against the commit the branch was cut
+  from, not today's base. If the base has moved, the suite that ran may be materially
+  smaller, and a passing run's totals look complete unless you know what they should be.
+  Check any PR open more than a day or two, and always a major:
 
   ```bash
   branch=$(gh pr view <n> --json headRefName --jq .headRefName)
   git fetch origin "$branch"
-  git merge-base --is-ancestor origin/main "origin/$branch" \
-    && echo "based on current main" || echo "STALE — CI ran against an older base"
+  git merge-base --is-ancestor "origin/$BASE" "origin/$branch" \
+    && echo "based on current $BASE" || echo "STALE"
+  git ls-tree -r --name-only "origin/$branch" | grep -cE '\.test\.[jt]sx?$'   # when stale,
+  git ls-tree -r --name-only "origin/$BASE"   | grep -cE '\.test\.[jt]sx?$'   # compare
   ```
 
-  When it is stale, compare what the two trees actually hold. Test files are the usual tell:
+  Runners that collect tests by glob from the root are the exposed ones. A real case: a
+  vitest bump whose CI reported "33 passed (33)" while the base had 51 test files, 18 of
+  them landed after the branch was cut. If the counts differ, say so in the plan instead of
+  quoting the green tick, and put the PR in the rebuild queue (step 4).
+- **`action_required` checks.** An automated commit on the branch (formatter, lockfile
+  generator, migration step) left the follow-up runs waiting for maintainer approval. The
+  suite hasn't failed; it hasn't run. Follow
+  [references/workflow-approvals.md](references/workflow-approvals.md): list them in the
+  plan and ask before approving anything.
 
-  ```bash
-  git ls-tree -r --name-only "origin/$branch" | grep -cE '\.test\.[jt]sx?$'
-  git ls-tree -r --name-only origin/main      | grep -cE '\.test\.[jt]sx?$'
-  ```
+### 3. Report the plan
 
-  Repos whose runner collects by glob from the root are the exposed ones — the number of
-  files collected is a function of branch age, so a stale branch silently tests less. A real
-  case: a vitest bump whose CI proudly reported "33 passed (33)" while the base branch had
-  51 test files, because 18 had landed after the branch was cut.
+Say what you are about to merge, what you are leaving alone, and why. If the classification
+is wrong, this is where it gets caught, at no cost.
 
-  If the counts differ, say so in the plan instead of quoting the green tick. The fix is
-  cheap: post the Dependabot command yourself (`rebase` normally, `recreate` when automation
-  has also committed — see "Rebuilding a branch" below), let it rebuild, and read CI on the
-  new branch. Never hand-rebase to close the gap.
+Write grouped bullets under `###` headings such as "Merging", "Rebuild, then merge" and
+"Leaving open", not a
+Markdown table: the reader may be in a terminal or a client that renders tables badly. One
+line per PR: number, dependency, version range, verdict.
 
-- **`action_required` checks (workflows awaiting approval)** — a workflow run was triggered
-  (typically because an automated pipeline step like a formatter, lockfile generator, or
-  migration tool committed back to the PR branch) and GitHub placed subsequent runs in
-  `action_required` (0s elapsed). This is not a test failure; the suite simply has not
-  run yet because GitHub requires maintainer approval for runs triggered by bot/action
-  commits.
+Then proceed. "Merge all Dependabot PRs" authorises merging the set that survives the
+filters. Stop for confirmation only when a gate was loosened, the plan is empty, the base
+has unpushed local commits (step 1), or something looks off. PRs waiting on a workflow
+approval don't hold up the others.
 
-  Never approve workflow runs silently or automatically. Approving runs code with repository
-  permissions on GitHub Actions runners, so it requires an explicit decision from the user.
-  Identify the triggering commit and the paused workflow run(s), present them in the plan,
-  and ask for confirmation before approving (see the approval workflow section below).
+### 4. Merge, one PR at a time
 
-### 3. Report the plan before touching anything
+Every merge moves the base, so the batch is a loop, not two phases. Never rebuild a
+batch of PRs up front and merge them afterwards. A PR that is ready can't sit waiting on
+the others' CI, and a merge can make the next PR in the same ecosystem stale or conflicted
+again, wasting its rebuild.
 
-State, in one or two lines, exactly what you are about to merge and what you are leaving
-alone and why. This is what makes a batch merge reviewable: if the classification is wrong,
-this is the moment it gets caught, and it costs nothing.
-
-Write it as grouped bullets under real Markdown headings (`###`), not a Markdown table. The
-script's table is for you; the reply goes to a person who may be reading it in a terminal or
-a client that renders tables badly, and a mangled table is worse than a plain list. Headings
-rather than bold labels, because they give the reader something to navigate by. One line per
-PR — number, dependency, the version range, and the verdict — under short headings like
-"Merging" and "Leaving open".
-
-Then proceed — an explicit "merge all Dependabot PRs" is authorisation to merge the set
-that survives the filters. Stop for confirmation only when a gate was loosened (above), the
-plan is empty, or something looks off. When a PR is held back only because a workflow run
-requires approval, ask for confirmation to approve that run; you may still proceed to merge
-the unaffected eligible PRs.
-
-### 4. Merge, one at a time
+**First, merge what is clear now:** green on the current base, mergeable. Go in ascending
+PR number and check each result before the next:
 
 ```bash
 gh pr merge <number> --rebase --delete-branch
 ```
 
-Add `--repo OWNER/REPO` when working outside the current directory. Merge in ascending PR
-number, checking each result before starting the next.
+**Then work the rebuild queue in lanes, one lane per ecosystem.** The queue is the stale
+PRs from step 2, plus any PR an earlier merge left conflicted, behind or with restarted
+checks. Group it by the script's ecosystem column. Within a lane, keep one PR in flight at
+a time. Across lanes, run in parallel: an npm bump and a Composer bump touch different
+manifests and lockfiles, so merging one doesn't conflict with the other, and GitHub
+Actions bumps only touch workflow files. Some cases change the lanes:
 
-Serialising matters here. Each merge advances the base branch, so later PRs can become
-`BEHIND` or start conflicting mid-batch — especially on repos whose branch protection
-requires branches to be up to date, where only the first merge in a batch will succeed.
-That is expected, not a failure of the plan.
+- **One ecosystem, several manifests** (a monorepo with separate `package.json` and
+  lockfile per app): PRs whose changed files don't overlap can be separate lanes. When
+  unsure, keep them in one.
+- **`unknown` ecosystem:** put all such PRs in a single lane of their own.
+- **Repo requires up-to-date branches:** every merge puts every other branch behind, so
+  lanes buy nothing; use a single lane. Act on this only if you already know it, for
+  example from a merge that failed as out of date. Don't make a call to check.
 
-When a merge fails partway through the batch, keep going with the rest and collect the
-failures. Common ones:
+For the PR at the head of each lane:
 
-| Failure | What it means | What to do |
+1. Look at it fresh. The last merge may already have set things moving: Dependabot rebases
+   a conflicted PR on its own when the base moves. If its branch is already on the current
+   base, or Dependabot has just pushed, skip the nudge and wait for CI.
+2. Otherwise nudge it ("Rebuilding a branch", below). A PR that is merely behind, with no
+   conflict, isn't rebased automatically, so it needs the nudge when the repo requires
+   up-to-date branches or when its green is stale.
+3. If you nudged, wait up to about ten minutes for Dependabot's new commit. If nothing
+   arrives, follow up as "Rebuilding a branch" describes.
+
+   ```bash
+   old=$(gh pr view <n> --json headRefOid --jq .headRefOid)    # before the nudge
+   for i in $(seq 20); do
+     [ "$(gh pr view <n> --json headRefOid --jq .headRefOid)" != "$old" ] && break
+     sleep 30
+   done
+   ```
+
+   Then wait for CI on the new commit:
+
+   ```bash
+   gh pr checks <n> --watch
+   ```
+
+   With several lanes in flight, CI runs concurrently on GitHub, so watching their PRs in
+   turn costs little. Nudge every lane's head first, then watch.
+4. Green: merge it and move that lane on to its next PR. Red, or stuck: leave it, note why,
+   and move that lane on. Merges still go one at a time, whichever lane they come from.
+
+Collect failures rather than stopping the batch:
+
+| Failure | Meaning | Action |
 |---|---|---|
-| `not mergeable: the merge commit cannot be created` / conflicts | The branch drifted, usually from an earlier merge in this batch | Report it and move on — see below before commenting anything |
-| Base branch out of date (branch protection) | Repo requires up-to-date branches | Same: report and move on |
-| `Pull request is not mergeable` on a PR the API still reports as `CLEAN` | GitHub's cached mergeability is stale — an earlier merge in this batch moved the base and the PR hasn't been re-evaluated yet | Retry once; if it fails identically, treat it as drift |
-| `Pull request is not mergeable` with pending checks | CI restarted after a base change | Offer auto-merge instead of waiting: `gh pr merge <n> --rebase --delete-branch --auto` |
-| `action_required` / workflow approval required | Pipeline commit triggered a follow-up run that paused for approval | Ask user for confirmation, then approve with `gh api` and watch to completion (see below) |
-| Review required | Branch protection wants an approval | Report it; do not self-approve or use `--admin` without being asked |
+| `the merge commit cannot be created` / conflicts | Drift from an earlier merge in this batch | Into the rebuild queue |
+| Base branch out of date (protection) | Repo requires up-to-date branches | Into the rebuild queue |
+| `Pull request is not mergeable` while the API says `CLEAN` | GitHub's cached mergeability is stale | Retry once; if it fails the same way, queue it |
+| `Pull request is not mergeable` with pending checks | CI restarted after a base change | Into the queue; wait for CI, no nudge |
+| `action_required` | A pipeline commit's run is waiting for approval | [references/workflow-approvals.md](references/workflow-approvals.md) |
+| Review required | Protection wants an approval | Report; never self-approve or use `--admin` unasked |
 
-### Rebuilding a branch: rebase by default, recreate when automation committed
+#### Rebuilding a branch
 
-Dependabot rebases its own open PRs when the base branch moves — that is the default
-`rebase-strategy`. So for the ordinary mid-batch conflict, the right move is to report the
-PR as needing another pass and stop there. Commenting adds noise and buys nothing, because
-the rebase was already coming.
-
-A branch needs a nudge when there is reason to think the automatic pass is not coming or not
-enough: a PR stale enough that its green checks ran against an older base (step 2), or one
-still conflicted well after an earlier merge should have triggered a rebase. When you reach
-that judgement, act on it — don't just recommend a command and leave the user to type it.
-Who has committed to the branch decides which command you send:
+Nudge a branch only when the automatic rebase isn't coming or isn't enough (step 4
+says when), and only for the PR at the head of its lane. Act; don't leave the user a
+command to type. Who has committed to the branch decides what you send:
 
 ```bash
-gh pr view <n> --json commits \
-  --jq '[.commits[].authors[] | {login, email}] | unique'
+gh pr view <n> --json commits --jq '[.commits[].authors[] | {login, email}] | unique'
 ```
 
-**Only Dependabot** — post a rebase yourself, no confirmation needed:
+- **Only Dependabot:** comment `@dependabot rebase`. This isn't a git rebase. It runs the
+  same refresh job as `recreate`, regenerating the update and lockfile against today's base
+  and picking up any newer release, so age alone is no reason to recreate. Dependabot also
+  acts on `rebase` more reliably.
+- **Dependabot plus automation** (a login or email ending in `[bot]`, or a workflow the user
+  says commits to these branches): comment `@dependabot recreate`. Dependabot won't rebase a
+  branch someone else has pushed to. Recreate discards the extra commits, which is fine:
+  the workflow reruns on the rebuilt branch and redoes them, and its run will likely land
+  in `action_required`.
+- **A person as well:** send nothing. Their commit may be a fix the bump needed, and
+  recreate would discard it. Name the PR and the authors and ask what to do.
 
 ```bash
-gh pr comment <n> --body "@dependabot rebase"
+gh pr comment <n> --body "@dependabot rebase"     # or recreate
 ```
 
-Prefer `rebase` here, even for an old PR. It is not a git rebase: both `rebase` and
-`recreate` run the same refresh job in dependabot-core, which regenerates the update against
-today's base, lockfile included. That job checks for a newer release first. If one exists it
-supersedes the PR with a new one, or for a grouped PR rebuilds it in place with the new
-versions. So `rebase` already picks up newer versions, and age alone is no reason to
-recreate. In practice Dependabot also acts on `rebase` more reliably; `recreate` is often
-ignored.
+No confirmation is needed for either comment. If Dependabot answers a `rebase` by saying the
+branch was edited, or nothing happens within a few minutes, recheck the authors: all bots
+means follow up with `recreate`, otherwise ask. If a recreate also goes unanswered, leave
+the PR for another pass and move on.
 
-**Automation as well as Dependabot** — post a recreate yourself, no confirmation needed:
+Never rebase a Dependabot branch by hand: that is exactly the "someone else pushed" state
+that stops Dependabot's own rebases. Never close a Dependabot PR unless asked: closing tells
+Dependabot to stop offering that update.
 
-```bash
-gh pr comment <n> --body "@dependabot recreate"
-```
+### 5. Bring the local checkout up to date
 
-Treat a commit as automation when its login or email ends in `[bot]` (for example
-`github-actions[bot]`, `renovate[bot]`, `pre-commit-ci[bot]`), or when the user has said a
-workflow commits to these branches. Typical cases are a lockfile regenerator, a formatter, or
-a migration step such as `biome migrate`. Dependabot stops rebasing a branch once anyone else
-has pushed to it, so `@dependabot rebase` does nothing there. `recreate` throws away the
-extra commits, and that is fine: the workflow that made them runs again on the rebuilt
-branch and redoes its work against the new versions. Expect that rerun to land in
-`action_required`, which you handle as described in "Approving workflows paused by pipeline
-commits" below.
+Once the batch is done (not after each merge), the local `BASE` is behind by everything that
+merged. Left that way, the user's next commit starts from a base without the bumps, and step
+6 would read pre-merge code. Act on the state step 1 found, after `git fetch origin`:
 
-**A person as well as Dependabot** — send nothing. Someone made a deliberate change, perhaps a
-code fix the bump needed, and `recreate` would discard it. Name the PR and the human authors,
-explain that a rebase won't help and a recreate would drop their commits, and ask what to do.
+- **On `BASE`:** `git pull --ff-only`
+- **On another branch, or detached:** `git fetch origin "$BASE:$BASE"`. This fast-forwards
+  `BASE` in place without touching the checkout. Remind the user their branch doesn't
+  have the bumps yet; rebasing or merging it is theirs to do.
+- **No local `BASE`:** the fetch was all there was to do.
+- **`BASE` in another worktree:** leave it; name the path so the user can pull there.
 
-If you posted a `rebase` and Dependabot answers that the branch has been edited by someone
-else, or nothing happens within a few minutes, look at the authors again. When they are all
-Dependabot or automation, follow up with `@dependabot recreate`. Otherwise ask the user.
+Fast-forward only. If it refuses (local commits on `BASE`, or uncommitted changes in the way),
+stop and report. Don't stash, rebase, merge or reset past it: that is the user's work.
 
-Say in the summary which PRs you sent which command to. Their CI reruns, so none of them is
-mergeable in this run.
+### 6. Assess the held-back majors
 
-Never rebase a Dependabot branch by hand. Dependabot owns these branches and hand-rebasing
-puts you in exactly the "someone else pushed to it" state described above, which stops the
-automatic rebases you were trying to help along.
+Do this after the merges, so nothing delays the bumps cleared to land. For each major, and
+each grouped PR whose worst member is a major, judge the risk for this project and give a
+verdict of Low risk, Needs work first, or Can't tell. Follow
+[references/assessing-majors.md](references/assessing-majors.md) for the evidence to gather
+and how to write it up. When the plan is empty, deliver the plan and the assessments in one
+reply; the read-out is the only useful thing that run produces. Skip only when the user
+asked.
 
-Never close a Dependabot PR to "clean up" unless the user asked for that. A closed PR tells
-Dependabot to stop offering that update, which is a decision with a long tail.
+### 7. Report the outcome
 
-### Approving workflows paused by pipeline commits
+Same grouped-bullet form as the plan:
 
-When a workflow step (such as Biome Migrate, Prettier, or a lockfile generator) commits
-back to a PR branch, GitHub Actions prevents subsequent workflows from running recursively
-or without oversight. As a result, subsequent workflow runs (such as CI) are marked with
-`conclusion: action_required` and 0s elapsed time.
+- **Merged:** PR numbers, dependency and version range.
+- **Rebuilt and merged:** which PRs went through the queue, and whether you posted `rebase`
+  or `recreate` on them.
+- **Needs another pass:** queue PRs that didn't make it, each with why: red after the
+  rebuild, Dependabot never responded, or it waits on the user because a recreate would
+  discard a person's commits.
+- **Awaiting approval:** PRs with paused workflow runs, the triggering commit, and what is
+  needed.
+- **Held back:** the majors with their assessments, security-labelled ones first and marked.
+- **Skipped:** everything else held (failing checks, no CI, unknown version, protection),
+  grouped. For no-CI PRs, say they merge when the user names the numbers.
+- **Failed:** anything that errored, with the error.
+- **Local checkout:** which branch you updated and how many commits came in, or why not
+  (different repo, no local base, another worktree, or what blocked the fast-forward). When
+  the user is on another branch, say it doesn't have the bumps yet.
 
-This is not a failing test suite or broken build — the checks have simply not executed. But
-because approving code execution on GitHub Actions runners grants repository access, you
-must **never approve workflow runs automatically or silently**. Always get confirmation
-from the user first.
-
-#### Detecting runs needing approval
-
-Find the workflow runs awaiting approval for the PR:
-
-```bash
-gh run list --commit <headSha> --json databaseId,workflowName,status,conclusion
-```
-
-Or list all pending approval runs across the repository:
-
-```bash
-gh run list --json databaseId,workflowName,conclusion \
-  --jq '.[] | select(.conclusion=="action_required")'
-```
-
-Inspect the latest commit on the branch to confirm what triggered it:
-
-```bash
-gh pr view <n> --json commits --jq '.commits[-1] | {author: .authors[0].login, message: .messageHeadline}'
-```
-
-#### Confirming and approving
-
-In the plan (step 3), list any PRs awaiting approval under an "Awaiting workflow approval"
-heading. State:
-- The PR number and dependency
-- What commit triggered the paused run (e.g. `github-actions[bot]` committing `chore: run biome:migrate`)
-- Which workflow runs are waiting for approval (e.g. `CI`)
-
-Ask the user explicitly for confirmation before approving:
-> "PR #54 has a CI workflow awaiting approval triggered by commit `chore: run biome:migrate` from `github-actions[bot]`. Shall I approve this workflow run?"
-
-Once the user confirms:
-
-```bash
-gh api -X POST /repos/:owner/:repo/actions/runs/<run-id>/approve
-```
-
-Watch the run until it completes:
-
-```bash
-gh run watch <run-id>
-```
-
-If CI completes successfully, the PR now satisfies the passing checks gate and is eligible
-to be merged using the normal workflow.
-
-### 5. Assess the majors you held back
-
-Holding a major back is the right default, but "skipped: major bump" on its own hands the
-user nothing to decide with — they would have to open each PR and do the reading you were
-already positioned to do. So for every PR the version filter held back (each major, and any
-grouped PR whose worst member is a major), work out how risky that upgrade is *for this
-project* and say so in the report. The assessment is information for the user; it never
-turns into a merge. A major you have judged low-risk still waits for the user to name it.
-
-Do this after the merges, not before — nothing here should delay the bumps that are already
-cleared to land. When the plan is empty and there is nothing to merge, deliver the plan and
-the assessments together in one reply rather than stopping at a two-line plan; the read-out
-is the only useful thing that run can produce. Skip the assessment only when the user asked
-for that.
-
-Check staleness here too (step 2). A major that has been sitting is exactly where a green
-tick is least trustworthy and where it carries the most weight in the write-up, so say which
-base the checks actually ran against. If the branch is stale, ask Dependabot to rebuild it
-(`rebase` or `recreate` per the author check in "Rebuilding a branch") and read CI on the
-rebuilt branch before you write the assessment — otherwise you are grading the upgrade on a
-suite that no longer matches the project.
-
-Start with the bundled script, which gathers the evidence Dependabot already attached to
-the PR:
-
-```bash
-python3 <skill-dir>/scripts/dependabot_prs.py --notes 42 45        # --repo as usual
-```
-
-For each PR it prints the version range, the upstream repository, which files the PR
-touches, the PR's check state, the release notes and changelog as plain text, and the lines
-in them that mention breaking changes, removals, or new runtime minimums. Read the notes,
-not just the flagged lines — the flags are a reading aid, and a release that only links to
-a blog post produces none. When the body carries no notes at all, the script says so and
-points at `gh release` for the upstream repo.
-
-Then work out what the evidence means for this codebase. The questions, in the order they
-usually settle things:
-
-- **Did CI pass on the PR?** Dependabot's branch ran the project's checks against the new
-  major, so green is the strongest single piece of evidence there is — but say what CI
-  covers, and how old the run is. A repo whose only check is a linter has proven nothing
-  about runtime behaviour, and a green from months ago ran against a main that has since
-  moved. Red is just as informative: the failing job's log usually names the exact break,
-  which turns "major bump" into "needs X changed". Job logs are long, so filter:
-
-  ```bash
-  gh pr checks <n>                                    # names, states, run links
-  gh run view --job <job-id> --log-failed | grep -iE -B3 'error|fail|cannot|not found' | head -60
-  ```
-- **What kind of dependency is it?** A dev tool (linter, test runner, bundler, type
-  package) breaks the build, not production, and a type package tracks its runtime's major
-  rather than carrying changes of its own. A GitHub Action's majors are almost always a
-  runtime bump or renamed inputs. A framework, or a library the code calls directly, is
-  where the real work lives. The manifest section it sits in and the PR's changed files tell
-  you which — a lockfile-only PR is a transitive dependency the project never imports by
-  name.
-- **Does this project touch what changed?** Take the removals and renames from the notes
-  and grep for them. For a library, the imports and call sites; for an Action, its `uses:`
-  lines and inputs; for a tool, its config file. If nothing in the repo uses the removed
-  surface, the major is a major for someone else.
-- **Does the new version's floor fit?** A new minimum Node, PHP, Python, or framework
-  version is the commonest hidden break. Compare it with what the project declares —
-  `engines`, `require.php`, `python_requires`, `.nvmrc`, `runs.using`, the CI matrix.
-- **How far is the jump?** Two majors at once (5 → 7) means two sets of breaking changes,
-  and the notes Dependabot pastes usually cover only one of them — check which.
-
-When the repo is not checked out locally, `gh search code --repo OWNER/REPO "<term>"` and
-`gh api repos/OWNER/REPO/contents/<path>` stand in for grep. Say so when that limited what
-you could verify.
-
-Anything public and read-only is fair game for evidence: the upstream's release page or
-announcement post, `npm view` / `composer show` / `pip index` for peer and engine
-constraints, the failing job's log. Actually trying the bump — installing the new version
-and running the build and tests — is allowed only in a throwaway copy of the repo, never in
-the user's checkout, and only when reading cannot settle the question; it is usually
-overkill, and the report should say when the verdict rests on a trial run rather than on
-reading.
-
-Write each assessment as one bullet under the "Held back" heading of the report: PR
-number, dependency, and version range, then the verdict, then a short paragraph — what
-actually breaks in the new major, whether this project is exposed to it and how you know
-(name the file or config key), and what would have to happen for the PR to merge ("say
-`merge #45`", "migrate the config first", "wait for upstream X"). Three to five sentences
-is the usual size; a genuinely tangled case can run longer, but every sentence should carry
-evidence or a decision, not changelog summary.
-
-Use one of three verdicts so the list scans:
-
-- **Low risk** — the breaking changes don't touch this project, and you can point at the
-  evidence.
-- **Needs work first** — something in this repo has to change before the bump is safe, and
-  you can name it.
-- **Can't tell** — the notes are missing, or the usage is dynamic enough that grep can't
-  settle it. Say what would settle it.
-
-Reach for "Can't tell" whenever that is the truth. A confident "low risk" that turns out
-wrong costs the user more than the honest gap would have, and it is the one thing that
-would make them stop trusting the report. Don't pad an assessment by restating the
-changelog; the user can read that on the PR. What they can't get from the PR is the link
-between the changelog and their own code, and that is the whole value of this step.
-
-### 6. Report the outcome
-
-Finish with a short factual summary, in the same plain grouped-bullet form as the plan:
-
-- Merged: PR numbers with the dependency and version range.
-- Needs another pass: PRs that hit conflicts or went stale. Say which of three states each is
-  in: Dependabot will rebase it on its own (the usual case, nothing owed but patience), you
-  posted `@dependabot rebase` or `@dependabot recreate` on it (say which), or it is waiting
-  on the user's decision because a recreate would discard a person's commits.
-- Awaiting approval: PRs with workflow runs waiting on maintainer approval, naming the
-  triggering commit and explaining what is needed.
-- Held back: the majors, each with its assessment from step 5. Security-labelled ones go
-  first and are marked as such.
-- Skipped: PRs held for any other reason (failing checks, no checks configured,
-  unverifiable version, blocked by protection), grouped so the user can decide what to do
-  about them. For the no-CI ones, spell out the way forward — they merge when the user
-  names the PR numbers.
-- Failed: anything that errored, with the error.
-
-Call out security updates that were held back or skipped. Dependabot labels them
-`security`, and a skipped security fix on a major bump is the one item in the leftovers that
-genuinely wants attention rather than a re-run tomorrow — which is why its assessment
-leads the list.
+Call out held-back or skipped security updates (Dependabot labels them `security`). A
+skipped security fix on a major is the one leftover that wants attention rather than a
+re-run tomorrow.
 
 ## Notes on the moving parts
 
-**Author filter.** Dependabot PRs are authored by `app/dependabot`. The script defaults to
-that; pass `--author` if a repo uses the legacy `dependabot-preview` or a mirror bot.
+**Author filter.** Dependabot PRs are authored by `app/dependabot`. Pass `--author` for the
+legacy `dependabot-preview` or a mirror bot.
 
-**Pre-1.0 versions.** `0.5.6 → 0.6.0` is a minor bump by the letter of semver, and both
-Dependabot and this script classify it that way, but pre-1.0 projects routinely ship
-breaking changes in that slot. The script flags these; pass the flag along in your report
-rather than burying it.
+**Pre-1.0 versions.** `0.5.6 → 0.6.0` is a minor by the letter of semver, but pre-1.0
+projects routinely break in that slot. The script flags these; carry the flag into the
+report.
 
-**Release notes come from the PR body.** Dependabot pastes the upstream release notes and
-changelog into collapsed `<details>` blocks. The inventory ignores them (they are full of
-other projects' "Bumps X from A to B" lines) but `--notes` is built on them. Some
-ecosystems never get notes — `@types/*` packages, for instance — and some upstreams only
-link to a blog post, so an empty notes section is common and means "look upstream", not
-"nothing changed".
+**Release notes come from the PR body.** The inventory ignores the collapsed `<details>`
+blocks; `--notes` is built on them. Some ecosystems never get notes (`@types/*`) and some
+upstreams only link a blog post, so empty notes mean "look upstream", not "nothing changed".
 
-**Grouped updates.** A grouped PR ("Bump the npm-dependencies group with 5 updates") is
-classified by its worst member, so one major in the group holds back the whole PR. That is
-the correct read — the PR is atomic, so the risk is the maximum risk in it.
+**Grouped updates** are classified by their worst member. The PR is atomic, so its risk is
+the maximum risk in it.
 
 **`mergeStateStatus` needs the `repo` token scope.** Without it the script retries without
-that field and says so; branch-protection state simply won't be visible, so expect merge
-attempts to surface protection failures that the plan could not predict.
+that field and says so, and protection failures surface only at merge time.
 
-**Mergeability is computed lazily.** A fresh PR can report `UNKNOWN`; re-running the script
-resolves it.
+**Mergeability is computed lazily.** A fresh PR can report `UNKNOWN`; re-run the script.
 
-**Commit metadata comes from a hand-written GraphQL query.** Dependabot's commit trailer
-(`update-type: version-update:semver-minor`) is the only place the bump type is stated
-outright, so the script has to read the commits — but asking `gh pr list` for `commits`
-alongside the other fields makes GitHub reject the query outright. gh expands that field to
-100 authors on each of 100 commits per PR, which exceeds the 500,000-node ceiling on any
-`--limit` above ~48, whether or not that many PRs exist.
-
-So the script lists PRs without `commits` and then runs one `gh api graphql` call asking for
-the commit messages alone, with an aliased `pullRequest(number:)` per PR. Measured cost for
-a full 100-PR batch: 500 nodes (0.1% of the ceiling) and 1 rate-limit point. Don't add
-`commits` back to the list query, and if you extend the GraphQL query, keep nested
-connections out of it — that multiplication is what broke it the first time.
-
-If a PR's commits can't be fetched, that PR falls back to its body: the versions are still
-there, the `update-type` trailer is not, so it is likelier to land as `unknown` and be held
-back. The script says so in that PR's notes. One unreadable PR doesn't cost the batch — GitHub
-returns the rest alongside the error, and the script keeps whatever resolved.
+**Commit data comes from a separate GraphQL query.** Don't add `commits` to the script's
+`gh pr list` query: GitHub rejects it above ~48 PRs. The script's module docstring explains
+why. If a PR's commits can't be fetched, it falls back to the body, is likelier to come out
+`unknown`, and the script notes it.

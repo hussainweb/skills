@@ -415,22 +415,54 @@ def evaluate(pr: dict, had_merge_state: bool) -> dict:
     if merge_state == "BLOCKED":
         blockers.append("blocked by branch protection (review or required check missing)")
 
+    labels = [l.get("name") for l in pr.get("labels") or []]
     return {
         "number": pr.get("number"),
         "title": pr.get("title"),
         "url": pr.get("url"),
         "branch": pr.get("headRefName"),
+        "ecosystem": ecosystem(pr.get("headRefName"), labels),
         "bump": bump,
         "checks": checks,
         "check_offenders": offenders,
         "mergeable": mergeable,
         "merge_state": merge_state,
-        "labels": [l.get("name") for l in pr.get("labels") or []],
+        "labels": labels,
         "dependencies": deps,
         "notes": notes,
         "blockers": blockers,
         "eligible_by_default": not blockers,
     }
+
+
+# Dependabot's default labels, for when the branch name doesn't carry the ecosystem.
+ECOSYSTEM_LABELS = {
+    "github_actions": "github_actions",
+    "javascript": "npm_and_yarn",
+    "python": "pip",
+    "php": "composer",
+    "go": "go_modules",
+    "ruby": "bundler",
+    "docker": "docker",
+    "rust": "cargo",
+    "java": "maven",
+}
+
+
+def ecosystem(branch: str | None, labels: list[str]) -> str:
+    """The PR's package ecosystem, e.g. `npm_and_yarn` or `github_actions`.
+
+    Dependabot names branches `dependabot/<ecosystem>/<directory>/<dependency>-<version>`
+    with `/` as the default separator. A repo can configure another separator, so fall
+    back to Dependabot's default labels, and to "unknown" when neither says.
+    """
+    parts = (branch or "").split("/")
+    if len(parts) >= 3 and parts[0] == "dependabot":
+        return parts[1]
+    for label in labels:
+        if label in ECOSYSTEM_LABELS:
+            return ECOSYSTEM_LABELS[label]
+    return "unknown"
 
 
 # Words that, in a changelog, tend to sit next to the thing that will break a consumer.
@@ -595,10 +627,11 @@ def print_table(rows: list[dict], had_merge_state: bool, repo: str | None = None
         print("No open Dependabot PRs found.")
         return
 
-    headers = ["PR", "BUMP", "CHECKS", "STATE", "OK", "TITLE"]
+    headers = ["PR", "ECOSYSTEM", "BUMP", "CHECKS", "STATE", "OK", "TITLE"]
     table = [
         [
             f"#{r['number']}",
+            r["ecosystem"],
             r["bump"],
             r["checks"],
             (r["merge_state"] or ("-" if had_merge_state else "n/a")),

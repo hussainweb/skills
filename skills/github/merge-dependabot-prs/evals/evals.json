@@ -2,13 +2,14 @@
   {
     "id": 1,
     "prompt": "Merge all the dependabot PRs in this repo please.",
-    "expected_output": "The agent should check `gh auth status` and the repo's allowed merge methods, run scripts/dependabot_prs.py to inventory and classify the open Dependabot PRs, show the user a plan naming which PRs will be merged and which are skipped with reasons, then merge only minor/patch bumps with all checks green using `gh pr merge <n> --rebase --delete-branch`, one at a time, and finish with a summary of merged / skipped / failed.",
+    "expected_output": "The agent should check `gh auth status` and the repo's allowed merge methods, run scripts/dependabot_prs.py to inventory and classify the open Dependabot PRs, show the user a plan naming which PRs will be merged and which are skipped with reasons, then merge only minor/patch bumps with all checks green using `gh pr merge <n> --rebase --delete-branch`, one at a time, fast-forward the local base branch once the batch is merged, and finish with a summary of merged / skipped / failed.",
     "assertions": [
       "runs_the_bundled_inventory_script_rather_than_hand_parsing_pr_titles",
       "merges_with_rebase_and_delete_branch_flags",
       "skips_major_version_bumps_without_being_told_to",
       "skips_prs_with_failing_or_pending_checks",
       "presents_a_plan_before_the_first_merge",
+      "pulls_the_local_base_branch_fast_forward_only_after_the_batch",
       "final_summary_lists_merged_and_skipped_prs_with_reasons"
     ],
     "files": []
@@ -130,6 +131,60 @@
       "explains_that_recreate_would_discard_the_human_commit",
       "asks_the_user_how_to_proceed",
       "still_merges_the_unaffected_eligible_prs"
+    ],
+    "files": []
+  },
+  {
+    "id": 11,
+    "prompt": "merge the dependabot PRs",
+    "expected_output": "The local main branch has two unpushed commits, one of which edits package.json and package-lock.json. The agent should spot them during preflight (comparing origin/main..main), list them at the top of the plan noting that one touches dependency manifests, explain that the PRs' CI never ran with these commits, and stop for confirmation, offering to push first, before merging anything. It should not push on its own.",
+    "assertions": [
+      "checks_for_unpushed_commits_on_the_local_base_branch_before_merging",
+      "lists_unpushed_commits_in_the_plan_and_flags_the_manifest_change",
+      "stops_for_confirmation_before_the_first_merge",
+      "does_not_push_without_being_asked"
+    ],
+    "files": []
+  },
+  {
+    "id": 12,
+    "prompt": "merge the dependabot PRs",
+    "expected_output": "The user has feature/checkout-flow checked out; all Dependabot PRs target main, and local main has no unpushed commits. The agent should notice in preflight that the user is not on the base branch, say in the plan that it will update main in place and leave feature/checkout-flow alone, merge the eligible PRs, then update main with `git fetch origin main:main` rather than `git pull` or `git pull origin main`, and tell the user their branch does not include the bumps yet.",
+    "assertions": [
+      "takes_the_base_branch_from_the_prs_rather_than_assuming",
+      "notes_in_the_plan_that_the_user_is_on_another_branch",
+      "does_not_run_git_pull_on_the_feature_branch",
+      "does_not_switch_branches",
+      "fast_forwards_local_main_in_place_with_git_fetch",
+      "tells_the_user_their_branch_lacks_the_bumps"
+    ],
+    "files": []
+  },
+  {
+    "id": 13,
+    "prompt": "merge the dependabot PRs",
+    "expected_output": "Five minor/patch PRs are green. #40 and #41 are based on current main; #36, #37 and #39 are all npm_and_yarn PRs, cut weeks ago, and main has moved since. The agent should merge #40 and #41 straight away, then take the stale PRs one at a time: nudge #36 (or wait if Dependabot already rebased it after the merges), wait for the new commit and its CI, merge it, and only then look at #37, and so on. It must not post rebase comments on several PRs before merging any of them, and must not hold the clear PRs back until the stale ones are rebuilt.",
+    "assertions": [
+      "merges_the_already_clear_prs_before_rebuilding_any_stale_one",
+      "rebuilds_stale_prs_one_at_a_time",
+      "merges_each_rebuilt_pr_as_soon_as_its_ci_passes_before_touching_the_next",
+      "does_not_post_rebase_comments_on_multiple_prs_up_front",
+      "rechecks_each_queued_pr_before_nudging_in_case_dependabot_already_rebased_it",
+      "waits_for_ci_with_gh_pr_checks_watch_rather_than_ending_the_run"
+    ],
+    "files": []
+  },
+  {
+    "id": 14,
+    "prompt": "merge the dependabot PRs",
+    "expected_output": "All six PRs are minor/patch with green checks on an old base, so all need rebuilding: #50 and #51 are npm_and_yarn, #52 and #53 are composer, #54 and #55 are github_actions. The repo does not require up-to-date branches. The agent should group the queue by the script's ecosystem column and run three lanes in parallel: nudge #50, #52 and #54 together, merge each as its CI passes, then nudge #51, #53 and #55. It must not have two PRs from the same ecosystem in flight at once.",
+    "assertions": [
+      "groups_the_rebuild_queue_by_ecosystem",
+      "rebuilds_one_pr_per_ecosystem_in_parallel",
+      "never_has_two_prs_from_the_same_ecosystem_in_flight",
+      "merges_one_pr_at_a_time_even_with_parallel_lanes",
+      "falls_back_to_a_single_lane_if_a_merge_fails_because_the_branch_is_out_of_date",
+      "does_not_query_branch_protection_or_rulesets_to_check_for_the_setting"
     ],
     "files": []
   }
