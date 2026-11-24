@@ -209,14 +209,15 @@ For the PR at the head of each lane:
 2. Otherwise nudge it ("Rebuilding a branch", below). A PR that is merely behind, with no
    conflict, isn't rebased automatically, so it needs the nudge when the repo requires
    up-to-date branches or when its green is stale.
-3. If you nudged, wait up to about ten minutes for Dependabot's new commit. If nothing
+3. If you nudged, wait about two minutes for Dependabot's new commit. It answers a comment
+   within moments or not at all, so a longer wait only delays the follow-up. If nothing
    arrives, follow up as "Rebuilding a branch" describes.
 
    ```bash
    old=$(gh pr view <n> --json headRefOid --jq .headRefOid)    # before the nudge
-   for i in $(seq 20); do
+   for i in $(seq 6); do
      [ "$(gh pr view <n> --json headRefOid --jq .headRefOid)" != "$old" ] && break
-     sleep 30
+     sleep 20
    done
    ```
 
@@ -230,6 +231,14 @@ For the PR at the head of each lane:
    turn costs little. Nudge every lane's head first, then watch.
 4. Green: merge it and move that lane on to its next PR. Red, or stuck: leave it, note why,
    and move that lane on. Merges still go one at a time, whichever lane they come from.
+
+Within a lane, order by readiness, not PR number. Whenever one PR goes green, merge it,
+even if it was queued behind another that Dependabot hasn't answered: a stuck PR at the
+head holds up nothing. Each merge also does the nudging for you. The PRs left in the lane
+usually share its lockfile, so the merge conflicts them, and Dependabot rebuilds a
+conflicted PR by itself, more dependably than it answers a comment. Look at each fresh
+after the merge (point 1); one that Git merged cleanly is only behind, and still needs a
+nudge.
 
 Collect failures rather than stopping the batch:
 
@@ -254,8 +263,8 @@ gh pr view <n> --json commits --jq '[.commits[].authors[] | {login, email}] | un
 
 - **Only Dependabot:** comment `@dependabot rebase`. This isn't a git rebase. It runs the
   same refresh job as `recreate`, regenerating the update and lockfile against today's base
-  and picking up any newer release, so age alone is no reason to recreate. Dependabot also
-  acts on `rebase` more reliably.
+  and picking up any newer release, so age alone is no reason to recreate. Either comment
+  can go unanswered; when `rebase` does, `recreate` usually works.
 - **Dependabot plus automation** (a login or email ending in `[bot]`, or a workflow the user
   says commits to these branches): comment `@dependabot recreate`. Dependabot won't rebase a
   branch someone else has pushed to. Recreate discards the extra commits, which is fine:
@@ -269,7 +278,7 @@ gh pr comment <n> --body "@dependabot rebase"     # or recreate
 ```
 
 No confirmation is needed for either comment. If Dependabot answers a `rebase` by saying the
-branch was edited, or nothing happens within a few minutes, recheck the authors: all bots
+branch was edited, or nothing happens within two minutes, recheck the authors: all bots
 means follow up with `recreate`, otherwise ask. If a recreate also goes unanswered, leave
 the PR for another pass and move on.
 
