@@ -1,4 +1,5 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "beads",
   "version": "0.1.0",
   "description": "Beads issue tracking: skills to set up, orchestrate, hand off to and trim beads, and a Claude Code row showing the bead in progress, the ready count, deferred beads that are due, the memory count and the estimated size of `bd prime`",
