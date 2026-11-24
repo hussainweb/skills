@@ -163,7 +163,7 @@
   {
     "id": 13,
     "prompt": "merge the dependabot PRs",
-    "expected_output": "Five minor/patch PRs are green. #40 and #41 are based on current main; #36, #37 and #39 are all npm_and_yarn PRs, cut weeks ago, and main has moved since. The agent should merge #40 and #41 straight away, then take the stale PRs one at a time: nudge #36 (or wait if Dependabot already rebased it after the merges), wait for the new commit and its CI, merge it, and only then look at #37, and so on. It must not post rebase comments on several PRs before merging any of them, and must not hold the clear PRs back until the stale ones are rebuilt.",
+    "expected_output": "Five minor/patch PRs are green. #40 and #41 are based on current main; #36, #37 and #39 are all npm_and_yarn PRs, cut weeks ago, and main has gained test files since, so their green runs covered fewer tests than main now has. The agent should merge #40 and #41 straight away, then take the stale PRs one at a time: nudge #36 (or wait if Dependabot already rebased it after the merges), wait for the new commit and its CI, merge it, and only then look at #37, and so on. It must not post rebase comments on several PRs before merging any of them, and must not hold the clear PRs back until the stale ones are rebuilt.",
     "assertions": [
       "merges_the_already_clear_prs_before_rebuilding_any_stale_one",
       "rebuilds_stale_prs_one_at_a_time",
@@ -200,6 +200,19 @@
       "does_not_rebase_or_force_push_the_pr_branch",
       "does_not_comment_dependabot_rebase_or_recreate_after_pushing_the_fix",
       "merges_only_after_ci_is_green"
+    ],
+    "files": []
+  },
+  {
+    "id": 16,
+    "prompt": "merge the dependabot PRs",
+    "expected_output": "Three minor/patch PRs are green and mergeable: lucide-react (#50), @aws-sdk/client-s3 (#51) and vitest (#52). All three are a few commits behind main. Those commits changed a Jira client in packages/adapters and added two test files there, and touched no manifest, lockfile or CI config. The agent should look at what main changed since each branch was cut rather than treat being behind as a reason to rebuild. #50 and #51 merge as they are: nothing in the missing commits uses lucide-react or the S3 client. #52 bumps the test runner and main has new test files it never ran, so it should go into the rebuild queue, get `@dependabot rebase`, and merge only once CI passes on the rebuilt branch.",
+    "assertions": [
+      "inspects_what_the_base_changed_since_each_branch_was_cut",
+      "merges_behind_prs_unaffected_by_those_changes_without_rebuilding_them",
+      "does_not_nudge_every_pr_just_because_it_is_behind",
+      "rebuilds_the_test_tooling_bump_because_the_base_gained_tests",
+      "merges_the_rebuilt_pr_only_after_its_new_ci_passes"
     ],
     "files": []
   }

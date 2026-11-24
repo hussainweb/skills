@@ -4,7 +4,7 @@ description: Merge open Dependabot pull requests in a GitHub repository using th
 allowed-tools: Bash, Read
 metadata:
   authors: "Hussain Abbas"
-  version: "1.6.1"
+  version: "1.6.2"
 ---
 
 # Merge Dependabot PRs
@@ -91,8 +91,10 @@ conflicting; one that changes code calling the dependency, or the CI config, can
 bump that looks green. If there are any, lead the plan with an "Unpushed local commits"
 heading: their subjects, flagging those that touch manifests, lockfiles, CI config or code
 using a dependency in the batch. Then stop for confirmation. The better order is usually to
-push first, let Dependabot rebase and CI rerun, then merge. Offer to push; don't push
-unasked. If the user says merge anyway, go ahead.
+push first, then judge every PR against the pushed base as step 2 does for a branch behind
+it: most merge as they are, and only those the commits bear on need a rebuild. Dependabot
+won't start those rebuilds itself, since a PR that is merely behind isn't conflicted. Offer
+to push; don't push unasked. If the user says merge anyway, go ahead.
 
 Then note which of these the checkout is in:
 
@@ -133,24 +135,37 @@ Four results need judgement:
   goes unnoticed. Tell the user to name the PR numbers if they want them. When they do
   ("merge #29 and #31"), that is the deliberate instruction the gate was waiting for; merge
   with the usual defaults, no further confirmation.
-- **`pass` on a stale branch.** Green proves the bump against the commit the branch was cut
-  from, not today's base. If the base has moved, the suite that ran may be materially
-  smaller, and a passing run's totals look complete unless you know what they should be.
-  Check any PR open more than a day or two, and always a major:
+- **`pass` on a branch behind the base.** Green proves the bump against the commit the
+  branch was cut from, not today's base. Being behind is no reason to rebuild by itself: a
+  rebase merge replays the bump onto the current base, and the base's own CI runs on the
+  result. A PR that is behind but merges cleanly goes straight in, unless one of these holds:
+
+  - the repo requires up-to-date branches;
+  - the base has gained test files since the branch was cut (the counts below differ);
+  - the bump is test, lint, type-check, build or CI tooling, and the base has gained code
+    or tests since;
+  - the commits the branch is missing change code that uses the bumped dependency, or the
+    CI config.
+
+  Then it goes into the rebuild queue (step 4). How far behind doesn't count on its own;
+  dozens of commits only make one of these likelier. Check any PR open more than a day or
+  two, any PR after the base has taken a push, and always a major:
 
   ```bash
   branch=$(gh pr view <n> --json headRefName --jq .headRefName)
   git fetch origin "$branch"
   git merge-base --is-ancestor "origin/$BASE" "origin/$branch" \
-    && echo "based on current $BASE" || echo "STALE"
-  git ls-tree -r --name-only "origin/$branch" | grep -cE '\.test\.[jt]sx?$'   # when stale,
+    && echo "based on current $BASE" || echo "BEHIND"
+  # when behind: what the base changed since the branch was cut
+  git diff --stat "$(git merge-base "origin/$BASE" "origin/$branch")" "origin/$BASE"
+  git ls-tree -r --name-only "origin/$branch" | grep -cE '\.test\.[jt]sx?$'   # and
   git ls-tree -r --name-only "origin/$BASE"   | grep -cE '\.test\.[jt]sx?$'   # compare
   ```
 
   Runners that collect tests by glob from the root are the exposed ones. A real case: a
   vitest bump whose CI reported "33 passed (33)" while the base had 51 test files, 18 of
   them landed after the branch was cut. If the counts differ, say so in the plan instead of
-  quoting the green tick, and put the PR in the rebuild queue (step 4).
+  quoting the green tick.
 - **`action_required` checks.** An automated commit on the branch (formatter, lockfile
   generator, migration step) left the follow-up runs waiting for maintainer approval. The
   suite hasn't failed; it hasn't run. Follow
@@ -186,9 +201,9 @@ PR number and check each result before the next:
 gh pr merge <number> --rebase --delete-branch
 ```
 
-**Then work the rebuild queue in lanes, one lane per ecosystem.** The queue is the stale
-PRs from step 2, plus any PR an earlier merge left conflicted, behind or with restarted
-checks. Group it by the script's ecosystem column. Within a lane, keep one PR in flight at
+**Then work the rebuild queue in lanes, one lane per ecosystem.** The queue is the PRs
+step 2 sent there, plus any PR an earlier merge left conflicted or with restarted checks,
+or behind for one of step 2's reasons. Group it by the script's ecosystem column. Within a lane, keep one PR in flight at
 a time. Across lanes, run in parallel: an npm bump and a Composer bump touch different
 manifests and lockfiles, so merging one doesn't conflict with the other, and GitHub
 Actions bumps only touch workflow files. Some cases change the lanes:
@@ -207,8 +222,8 @@ For the PR at the head of each lane:
    a conflicted PR on its own when the base moves. If its branch is already on the current
    base, or Dependabot has just pushed, skip the nudge and wait for CI.
 2. Otherwise nudge it ("Rebuilding a branch", below). A PR that is merely behind, with no
-   conflict, isn't rebased automatically, so it needs the nudge when the repo requires
-   up-to-date branches or when its green is stale.
+   conflict, isn't rebased automatically, so it needs the nudge when one of step 2's
+   reasons for a branch behind the base holds. When none does, merge it as it is.
 3. If you nudged, wait about two minutes for Dependabot's new commit. It answers a comment
    within moments or not at all, so a longer wait only delays the follow-up. If nothing
    arrives, follow up as "Rebuilding a branch" describes.
@@ -237,8 +252,8 @@ even if it was queued behind another that Dependabot hasn't answered: a stuck PR
 head holds up nothing. Each merge also does the nudging for you. The PRs left in the lane
 usually share its lockfile, so the merge conflicts them, and Dependabot rebuilds a
 conflicted PR by itself, more dependably than it answers a comment. Look at each fresh
-after the merge (point 1); one that Git merged cleanly is only behind, and still needs a
-nudge.
+after the merge (point 1); one that Git merged cleanly is only behind, and merges as it is
+unless one of step 2's reasons holds.
 
 Collect failures rather than stopping the batch:
 
