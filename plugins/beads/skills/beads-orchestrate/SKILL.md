@@ -4,7 +4,7 @@ description: Run a multi-agent development session over a batch of beads (`bd`) 
 allowed-tools: Bash, Read, Grep, Glob, Agent, SendMessage, AskUserQuestion
 metadata:
   authors: "Hussain Abbas"
-  version: "1.4.0"
+  version: "1.5.0"
 ---
 
 # Beads orchestration
@@ -52,6 +52,10 @@ conversation is lost the moment it ends.
 - **Pass the user's standing instructions into every prompt.** Commit, push, deploy,
   attribution and signing policy come from the user's CLAUDE.md, AGENTS.md and what they
   said this session. An agent cannot see your conversation, so leave nothing implied.
+- **Push authority comes from this session.** A memory or an earlier session saying pushes
+  are fine authorises nothing today, and a permission classifier refuses an agent launch
+  whose prompt pushes to main on a memory's authority alone. Ask in Phase 1 whether agents
+  may push, and include the push section of the prompt only on a yes.
 - **Clarify, don't assume.** When an answer is ambiguous, ask one follow-up. When you fill a
   gap with your own recommendation, say so explicitly, so it is visibly your call and not
   the user's.
@@ -66,7 +70,11 @@ conversation is lost the moment it ends.
    with only a preview shown; read the saved file end to end. It carries the workflow rules
    and the memories every session is meant to have.
 2. Read the repo's `AGENTS.md` and `CLAUDE.md` (and anything they point to). These hold the
-   quality gates, commit conventions and deploy rules you will pass to agents.
+   quality gates, commit conventions and deploy rules you will pass to agents. If the repo
+   has `.beads/KNOWLEDGE.md`, read its sections on orchestrating agents and on the areas
+   your beads touch: it holds what earlier sessions learned about this repo that is too
+   narrow for every session's memories (the dev environment in worktrees, extra gates,
+   measured agent budgets, files that parallel lanes collide on).
 3. Pull before trusting a listing. If the database has a Dolt remote (`bd dolt remote
    list` shows one), run `bd dolt pull` now. A local database can lag behind the remote,
    and then `bd list` and `bd show` report beads as missing or stale. Do not conclude a
@@ -229,11 +237,21 @@ areas other agents own, the git and deploy policy, and the report format spelled
   Every prompt, isolated or not, carries the hard-stop rule from
   `references/agent-prompt.md` section 5: a refused git command means stop and report the
   refusal text, never a wrapper script or a workaround. An agent that tries one is flagged
-  as a bypass and locked out of bd and file reads too.
+  as a bypass and locked out of bd and file reads too. A command-rewriting hook can also
+  make the classifier refuse a shell or Agent call that shares a response with another
+  call, and a worktree guard refuses compound commands (`&&`, `cd`, globs, loops,
+  variables, heredocs, `$(...)`). Where either is in play, the prompt carries the
+  one-command rule from the same section.
 - Per-checkout dev environments collide: two worktrees of a DDEV, Lando or Docker Compose
   project have the same project name. Tell each agent how to give its environment a unique,
   uncommitted name (e.g. `.ddev/config.local.yaml`), and to stop it when done.
 - Serial chains inside one agent run in the order of their dependencies.
+- **Write the shared part of the brief once.** Setup, gates, git and push policy, the hard
+  stop and the report format are the same for every agent of a kind (server slices, page
+  slices). Write them once to a file in your scratchpad, where agents in harness worktrees
+  can read it, have each prompt tell the agent to read it first, and keep the prompt itself
+  to what is particular to its beads. (Measured: agents briefed in full ran 70 to 126 tool
+  uses against a budget of 50; with one shared brief file per kind of slice, 40 to 55.)
 - **Hand each agent the memories that apply, not `bd prime`.** You read all of `bd prime` in
   Phase 0, and it is 20k tokens or more that would otherwise sit in every agent's context for
   every request. For each agent: take the keywords from its beads (the tools, frameworks, paths and
@@ -271,6 +289,19 @@ When an agent reports (format in `references/agent-report.md`):
    the way. Anything in scope that is now ready gets planned and launched. Don't wait for
    the whole current wave if the next bead only needed one of them.
 
+**Land each finished branch before the next agent needs it.** Rebase it onto local main
+(`git -C <worktree> rebase main`), rerun the gates there, then fast-forward main, and tell
+a following agent to merge main rather than a sibling branch: unrebased sibling branches
+conflict. When local main is ahead of the remote (a session with no pushes), an agent in a
+harness worktree reaches it with `git merge --ff-only main`; a permission classifier may
+refuse `git reset --hard main`.
+
+**Watch the disk.** Every worktree carries its own dependencies (about 760 MB each in a
+Laravel and Node project; fifteen of them filled a 96 GB disk and stopped agents at
+setup). Once a worktree's commits are on main (check by ancestry or `git cherry`, since a
+rebase changes hashes) and you will not resume its agent, remove it and its branch then,
+not at close-out.
+
 **Continue a finished agent only while its context is small and warm.** Resuming an agent
 (SendMessage, or the harness's equivalent) keeps its context intact: the repo layout, the
 gotchas, its own earlier work. Every request it makes from then on re-sends all of that
@@ -285,8 +316,12 @@ context. Continue it only when all of these hold:
 
 Give it the new bead, what has changed on main since, any new boundaries, and any memories
 that apply to the new bead and were not in its first brief. Otherwise start fresh: a new
-agent in the same worktree, on the tier the new bead needs, briefed from the hand-off
-notes. Those notes are what make a fresh start cheap, so an agent that didn't leave them
+agent on the tier the new bead needs, briefed from the hand-off notes. It can work in the
+same worktree only when that is a plain path made with `git worktree add`. A
+harness-isolated agent gets a new worktree from the base and cannot see another
+worktree's files, so it takes the earlier agent's commits with `git cherry-pick <hash>`
+(then `git reset --soft HEAD~1` to unpack a `wip:` commit), never a fast-forward. An agent
+whose harness worktree had no changes cannot be resumed at all: the harness removed it. Those notes are what make a fresh start cheap, so an agent that didn't leave them
 gets asked for them before it is retired. Resuming needs the agent's worktree to still
 exist, so don't remove one you may continue (Phase 5).
 

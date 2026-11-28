@@ -70,8 +70,10 @@ does not re-open it:
 > **You have a budget of about `<budget, e.g. 50>` tool uses.** Everything you read stays
 > in your context and is re-sent on every request, so a long run costs far more than two
 > short ones. Keep count. When you reach the budget, stop where you are, even mid-bead:
-> commit what passes the gates, append a checkpoint note to the bead (what is committed,
-> what is uncommitted, the next step, the worktree path and branch), and report. A fresh
+> commit what passes the gates, commit anything unfinished as a local `wip:` commit (never
+> pushed) so the next agent can take it from another worktree, append a checkpoint note to
+> the bead (what is committed, which commit is the wip, the next step, the worktree path
+> and branch), and report. A fresh
 > agent continues from your note. Don't start another bead past about half the budget.
 >
 > Keep what you read small: read the part of a file you need rather than all of it, run
@@ -88,8 +90,11 @@ does not re-open it:
 > <fresh dependency install, e.g. npm ci>
 > ```
 
-Use the remote base only when it is current. With no remote, or with unpushed work on
-`main`, have the agent create its worktree from local `main` instead:
+Use the remote base only when it is current. When local `main` is ahead of the remote and
+the agent is in a harness worktree, it runs `git merge --ff-only main` in place of the
+reset (a permission classifier may refuse `git reset --hard main`). Otherwise, with no
+remote or with unpushed work on `main`, have the agent create its worktree from local
+`main` instead:
 
 > ```bash
 > git -C <repo> worktree add ../<repo>-wt/<name> -b <branch> main
@@ -109,6 +114,12 @@ Every prompt, isolated or not, carries this hard stop:
 > stop and report the refusal text verbatim under Flags. Do not wrap git in a script, alias
 > it, or route around the refusal in any other way. A workaround reads as a bypass and locks
 > you out of bd and file reads as well.
+
+Where the probe found a command-rewriting hook or a worktree guard, add:
+
+> Send one short, plain command per tool call, and one shell call per response: no `&&`
+> chains, `cd`, globs, loops, variables, heredocs or `$(...)`. Write files with the edit
+> tools, not the shell. A guard or classifier may refuse anything else.
 
 ## 6. Quality gates and commits
 
